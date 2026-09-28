@@ -44,16 +44,29 @@ async function openNewProjectForm(page: Page) {
 	return projectNameField;
 }
 
-for (const characterCount of [250, 251]) {
-	test(`[Naveen] Project name with ${characterCount} characters cannot be created`, async ({ page }) => {
-		test.skip(!email || !password, 'Set TESTSIGMA_EMAIL and TESTSIGMA_PASSWORD in .env to run this test.');
+const lengthError = /project name.*250.*character|250.*character.*project name/i;
 
-		const projectNameField = await openNewProjectForm(page);
-		await projectNameField.fill('P'.repeat(characterCount));
-		await projectNameField.blur();
+// 250 characters is the maximum allowed length, so it is accepted; the project is not created to keep the account clean.
+test('[Naveen] Project name with 250 characters is accepted', async ({ page }) => {
+	test.skip(!email || !password, 'Set TESTSIGMA_EMAIL and TESTSIGMA_PASSWORD in .env to run this test.');
 
-		await expect(projectNameField).toHaveValue('P'.repeat(characterCount));
-		await expect(page.getByText(/project name.*250.*character|250.*character.*project name/i)).toBeVisible();
-		await expect(page.getByRole('button', { name: 'Create', exact: true })).toBeDisabled();
-	});
-}
+	const projectNameField = await openNewProjectForm(page);
+	await projectNameField.fill('P'.repeat(250));
+	await projectNameField.blur();
+
+	await expect(projectNameField).toHaveValue('P'.repeat(250));
+	await expect(page.getByText(lengthError)).toBeHidden();
+	await expect(page.getByRole('button', { name: 'Create', exact: true })).toBeEnabled();
+});
+
+test('[Naveen] Project name with 251 characters cannot be created', async ({ page }) => {
+	test.skip(!email || !password, 'Set TESTSIGMA_EMAIL and TESTSIGMA_PASSWORD in .env to run this test.');
+
+	const projectNameField = await openNewProjectForm(page);
+	await projectNameField.fill('P'.repeat(251));
+	await projectNameField.blur();
+
+	await expect(projectNameField).toHaveValue('P'.repeat(251));
+	await expect(page.getByText(lengthError)).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Create', exact: true })).toBeDisabled();
+});

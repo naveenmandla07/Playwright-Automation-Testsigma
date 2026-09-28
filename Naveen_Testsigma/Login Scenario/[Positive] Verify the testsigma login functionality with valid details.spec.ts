@@ -49,7 +49,10 @@ test('[Positive] Verify logout from the TestSigma dashboard', async ({ page }) =
 		const viewport = page.viewportSize();
 		await page.mouse.move(20, (viewport?.height ?? 720) - 20);
 
-		const profileIcon = page.getByText('Q', { exact: true });
+		// The profile menu shows the user's initial, name and role; match its structure so any account works.
+		const profileIcon = page.getByRole('navigation').locator('div.cursor-pointer')
+			.filter({ has: page.getByTestId('angle-right') })
+			.filter({ has: page.getByText(/^[A-Z]$/) });
 		await expect(profileIcon).toBeVisible();
 		await profileIcon.click();
 

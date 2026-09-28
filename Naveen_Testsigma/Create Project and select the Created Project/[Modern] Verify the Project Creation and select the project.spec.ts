@@ -69,7 +69,9 @@ test('[Modern] Verify Testsigma_New_Project_1_Modern creation and selection', as
 		}
 
 		if (projectAlreadyExists) {
-			if (await goToProjectButton.isEnabled()) {
+			// The header shows the current project; switch to it only when another project is current.
+			if ((await projectApplicationTab.innerText()).trim() !== projectName) {
+				await expect(goToProjectButton).toBeEnabled();
 				await goToProjectButton.click();
 				await expect(page).toHaveURL(/cases\/filters/, { timeout: 30000 });
 			}
@@ -137,7 +139,8 @@ test('[Modern] Verify Testsigma_New_Project_1_Modern creation and selection', as
 		const otherProjectRow = page.getByRole('row').filter({ hasNotText: projectName }).first();
 		await expect(otherProjectRow).toBeVisible();
 		await otherProjectRow.click();
-		await expect(goToProjectButton).toBeDisabled();
+		// Choosing a project other than the current one enables navigating to it.
+		await expect(goToProjectButton).toBeEnabled();
 
 		await page.reload();
 		await page.mouse.move(20, 100);
@@ -152,9 +155,8 @@ test('[Modern] Verify Testsigma_New_Project_1_Modern creation and selection', as
 		await expect(projectDropdown).toContainText(projectName);
 		await expect(applicationDropdown).toContainText('Web App');
 		await expect(versionDropdown).toContainText('modern web');
-		await expect(goToProjectButton).toBeEnabled();
-		await goToProjectButton.click();
-		await expect(page).toHaveURL(/cases\/filters/, { timeout: 30000 });
+		// The created project is already the current one, so there is nothing to navigate to.
+		await expect(goToProjectButton).toBeDisabled();
 	} catch (error) {
 		throw new Error('TestSigma Modern project creation and selection scenario failed.', { cause: error });
 	}

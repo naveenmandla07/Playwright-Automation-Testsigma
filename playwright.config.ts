@@ -41,6 +41,14 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testIgnore: /Create Project and select the Created Project/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      /* These tests switch the account's current project, which is shared server-side, so run them one at a time. */
+      name: 'chromium-projects',
+      testMatch: /Create Project and select the Created Project\/.*\.spec\.ts/,
+      workers: 1,
       use: { ...devices['Desktop Chrome'] },
     },
   ],

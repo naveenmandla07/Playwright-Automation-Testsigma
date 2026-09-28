@@ -71,7 +71,8 @@ test('[Modern] Verify all editable project settings, persistence and deletion', 
 		}
 
 		if (projectAlreadyExists) {
-			if (await goToProjectButton.isEnabled()) {
+			// The header shows the current project; switch to it only when another project is current.
+			if ((await projectApplicationTab.innerText()).trim() !== projectName) {
 				await expect(goToProjectButton).toBeEnabled();
 				await goToProjectButton.click();
 				await expect(page).toHaveURL(/cases\/filters/, { timeout: 30000 });
@@ -244,24 +245,37 @@ test('[Modern] Verify all editable project settings, persistence and deletion', 
 		}
 
 		await test.step('Verify every project option can be saved and restored', async () => {
-			for (const option of ['Allow adding multiple applications in this project', 'Allow multiple versions']) {
+			const options = [
+				{ option: 'Allow adding multiple applications in this project', field: 'hasMultipleApps' },
+				{ option: 'Allow multiple versions', field: 'hasMultipleVersions' },
+			];
+			for (const { option, field } of options) {
 				for (const checked of [false, true]) {
 					await test.step(`${option}: ${checked}`, async () => {
 						const dialog = page.getByRole('dialog');
 						await dialog.getByText('Project Details', { exact: true }).first().click();
+						// The form loads the saved values asynchronously and resets any change made before they arrive.
+						await expect(dialog.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue(projectName);
 						const checkbox = dialog.getByRole('checkbox', { name: option, exact: true });
-						await expect(checkbox).toBeEnabled();
-						// The decorative checkmark covers the input; toggle through the keyboard.
-						if (await checkbox.isChecked() !== checked) {
-							await checkbox.press('Space');
-						}
-						await expect(checkbox).toBeChecked({ checked });
 						const update = dialog.getByRole('button', { name: 'Update', exact: true });
-						await expect(update).toBeEnabled();
+						await expect(checkbox).toBeEnabled();
+						// The decorative checkmark covers the input, and a keyboard toggle does not reach the form state; click the label.
+						await expect(async () => {
+							if (await checkbox.isChecked() !== checked) {
+								await dialog.getByText(option, { exact: true }).click();
+							}
+							await expect(checkbox).toBeChecked({ checked, timeout: 1000 });
+							await expect(update).toBeEnabled({ timeout: 1000 });
+						}).toPass({ timeout: 15000 });
+						const updateRequest = page.waitForRequest((request) => request.method() === 'PUT' && /\/private\/projects\/\d+$/.test(request.url()));
 						await update.click();
+						expect((await updateRequest).postDataJSON()[field]).toBe(checked);
 						await expect(page.getByText(/project.*updated.*successfully/i)).toBeVisible({ timeout: 30000 });
-						await reopenSettings(projectName, 'Web App', 'modern web');
-						await expect(checkbox).toBeChecked({ checked });
+						// The update is accepted (202) and applied asynchronously; reopen until the saved value is shown.
+						await expect(async () => {
+							await reopenSettings(projectName, 'Web App', 'modern web');
+							await expect(checkbox).toBeChecked({ checked, timeout: 2000 });
+						}).toPass({ timeout: 60000 });
 						await expect(update).toBeDisabled();
 					});
 				}
