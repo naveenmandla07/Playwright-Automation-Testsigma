@@ -16,12 +16,19 @@ const variables = Array.from({ length: variableCount }, (_, index) => {
 	return { key: `pw_env_${runId}_var_${number}`, value: `value_${number}` };
 });
 const renamedVariable = { from: variables[0].key, to: `${variables[0].key}_renamed` };
-type Variable = { id: number; key: string; value: string; projectId: number; isEncrypted: boolean };
+type Variable = { id: number; key: string; value: string; projectId: number; isEncrypted: boolean; isDefault?: boolean };
 
 const updatedValues = [
 	{ key: variables[1].key, value: 'value_02_updated' },
 	{ key: variables[2].key, value: 'value_03_updated' },
 ];
+
+const encryptedVariable = { key: `pw_env_${runId}_secret`, value: 'secret_value' };
+const unencryptedVariable = { key: `pw_env_${runId}_not_secret`, value: 'not_secret_value' };
+// A variable added without encryption, then encrypted inside the environment.
+const encryptedInEnvironment = variables[3];
+// Stored encrypted values come back as ciphertext only.
+const ciphertext = /^V2:\S+$/;
 
 // The news-notification prompt can appear at any point after sign-in and blocks clicks until dismissed.
 async function dismissNewsNotificationWhenShown(page: Page) {
@@ -118,6 +125,29 @@ async function listProjectVariables(page: Page, projectId: number): Promise<Vari
 	const response = await page.request.get(`/private/environments/variables?query=projectId:${projectId}&size=500&page=0`);
 	expect(response.ok()).toBe(true);
 	return (await response.json()).content;
+}
+
+// Values set inside an environment override the project default for that environment only.
+async function listEnvironmentVariables(page: Page, projectId: number, environmentId: number): Promise<Variable[]> {
+	const response = await page.request.get(`/private/environments/variables/${projectId}/${environmentId}?size=500&page=0`);
+	expect(response.ok()).toBe(true);
+	return (await response.json()).content;
+}
+
+function findVariable(list: Variable[], key: string) {
+	const variable = list.find((item) => item.key === key);
+	expect(variable, `variable ${key}`).toBeDefined();
+	return variable!;
+}
+
+// The unlocked icon is named "decrypt" and turns encryption on; once on, it shows as "lock".
+async function expectEncryptedRow(page: Page, key: string) {
+	const row = variableRow(page, key);
+	await expect(row).toHaveCount(1);
+	await expect(variableValueField(row)).toHaveAttribute('type', 'password');
+	await expect(variableValueField(row)).toHaveValue(ciphertext);
+	await expect(row.getByTestId('lock')).toBeVisible();
+	await expect(row.getByTestId('decrypt')).toHaveCount(0);
 }
 
 async function expectVariable(page: Page, key: string, value: string) {
@@ -295,6 +325,144 @@ test.describe('Verify the CRUD operations of Environment', () => {
 		}
 	});
 
+	test('Encrypt a variable while adding it', async () => {
+		await openEnvironment(page, environmentsUrl, environmentId!, currentEnvironmentName);
+		await page.getByRole('button', { name: 'Add Variable', exact: true }).click();
+		const dialog = page.getByRole('dialog').filter({ hasText: 'Add Environment Variable' });
+		const valueField = dialog.getByRole('textbox', { name: 'Default Value', exact: true });
+		await expect(dialog.getByRole('heading', { name: 'Add Environment Variable' })).toBeVisible();
+		await dialog.getByRole('textbox', { name: 'Variable', exact: true }).fill(encryptedVariable.key);
+		await valueField.fill(encryptedVariable.value);
+		await expect(valueField).toHaveAttribute('type', 'text');
+
+		await dialog.getByTestId('decrypt').hover();
+		await expect(page.getByText('Encrypting data permanently conceals the original. Backup is strongly advised').first()).toBeVisible();
+		await dialog.getByTestId('decrypt').click();
+		await expect(dialog.getByTestId('lock')).toBeVisible();
+		await expect(valueField).toHaveAttribute('type', 'password');
+		await expect(valueField).toHaveValue(encryptedVariable.value);
+
+		// Until it is saved, the value can be shown and hidden again.
+		await dialog.getByTestId('visibility-off-outline').click();
+		await expect(valueField).toHaveAttribute('type', 'text');
+		await dialog.getByTestId('visibility-outline').click();
+		await expect(valueField).toHaveAttribute('type', 'password');
+
+		const createRequest = page.waitForRequest(isVariablesSave);
+		await dialog.getByRole('button', { name: 'Create', exact: true }).click();
+		const request = await createRequest;
+		expect(request.postDataJSON()).toEqual([expect.objectContaining({ ...encryptedVariable, isEncrypted: true })]);
+		expect((await request.response())!.ok()).toBe(true);
+		await expect(dialog).toBeHidden();
+		await expect(page.getByText('Variable created successfully').first()).toBeVisible();
+
+		// The server keeps only the ciphertext.
+		const saved = findVariable(await listProjectVariables(page, projectId!), encryptedVariable.key);
+		expect(saved.isEncrypted).toBe(true);
+		expect(saved.value).toMatch(ciphertext);
+		expect(saved.value).not.toContain(encryptedVariable.value);
+
+		await openEnvironment(page, environmentsUrl, environmentId!, currentEnvironmentName);
+		await expectEncryptedRow(page, encryptedVariable.key);
+		await expect(variableValueField(variableRow(page, encryptedVariable.key))).toHaveValue(saved.value);
+	});
+
+	test('Turn encryption off before saving a variable', async () => {
+		await page.getByRole('button', { name: 'Add Variable', exact: true }).click();
+		const dialog = page.getByRole('dialog').filter({ hasText: 'Add Environment Variable' });
+		const valueField = dialog.getByRole('textbox', { name: 'Default Value', exact: true });
+		await expect(dialog.getByRole('heading', { name: 'Add Environment Variable' })).toBeVisible();
+		await dialog.getByRole('textbox', { name: 'Variable', exact: true }).fill(unencryptedVariable.key);
+		await valueField.fill(unencryptedVariable.value);
+
+		await dialog.getByTestId('decrypt').click();
+		await expect(valueField).toHaveAttribute('type', 'password');
+		await dialog.getByTestId('lock').click();
+		await expect(dialog.getByTestId('decrypt')).toBeVisible();
+		await expect(dialog.getByTestId('lock')).toHaveCount(0);
+		await expect(valueField).toHaveAttribute('type', 'text');
+		await expect(valueField).toHaveValue(unencryptedVariable.value);
+
+		const createRequest = page.waitForRequest(isVariablesSave);
+		await dialog.getByRole('button', { name: 'Create', exact: true }).click();
+		const request = await createRequest;
+		expect(request.postDataJSON()).toEqual([expect.objectContaining({ ...unencryptedVariable, isEncrypted: false })]);
+		expect((await request.response())!.ok()).toBe(true);
+		await expect(dialog).toBeHidden();
+
+		const saved = findVariable(await listProjectVariables(page, projectId!), unencryptedVariable.key);
+		expect(saved).toMatchObject({ ...unencryptedVariable, isEncrypted: false });
+		await openEnvironment(page, environmentsUrl, environmentId!, currentEnvironmentName);
+		const row = variableRow(page, unencryptedVariable.key);
+		await expectVariable(page, unencryptedVariable.key, unencryptedVariable.value);
+		await expect(variableValueField(row)).toHaveAttribute('type', 'text');
+		await expect(row.getByTestId('decrypt')).toBeVisible();
+	});
+
+	test('Encrypt an existing variable in the environment', async () => {
+		await openEnvironment(page, environmentsUrl, environmentId!, currentEnvironmentName);
+		const { key, value } = encryptedInEnvironment;
+		const row = variableRow(page, key);
+		// The "D" badge marks a value inherited from the project default.
+		await expect(row.getByText('D', { exact: true })).toBeVisible();
+		await expect(variableValueField(row)).toHaveAttribute('type', 'text');
+
+		await row.getByTestId('decrypt').click();
+		await expect(row.getByTestId('lock')).toBeVisible();
+		await expect(variableValueField(row)).toHaveAttribute('type', 'password');
+		await expect(variableValueField(row)).toHaveValue(value);
+		await expect(page.getByText('You have unsaved changes', { exact: true })).toBeVisible();
+
+		const updateRequest = page.waitForRequest((request) => request.method() === 'PUT' && request.url().endsWith(`/private/environments/${environmentId}`));
+		await page.getByRole('button', { name: 'Update', exact: true }).click();
+		const request = await updateRequest;
+		expect(request.postDataJSON().variables).toEqual([expect.objectContaining({ key, value, isEncrypted: true })]);
+		expect((await request.response())!.ok()).toBe(true);
+		await expect(page.getByText('Variable updation successful').first()).toBeVisible();
+		await expect(page.getByText('You have unsaved changes', { exact: true })).toBeHidden();
+
+		await openEnvironment(page, environmentsUrl, environmentId!, currentEnvironmentName);
+		await expectEncryptedRow(page, key);
+		await expect(variableRow(page, key).getByText('D', { exact: true })).toHaveCount(0);
+		const inEnvironment = findVariable(await listEnvironmentVariables(page, projectId!, environmentId!), key);
+		expect(inEnvironment).toMatchObject({ isEncrypted: true, isDefault: false });
+		expect(inEnvironment.value).toMatch(ciphertext);
+
+		// Only this environment's value is encrypted; the project default stays readable.
+		expect(findVariable(await listProjectVariables(page, projectId!), key)).toMatchObject({ value, isEncrypted: false });
+		await page.goto(environmentsUrl.replace(/\/environments$/, '/environments/variables'));
+		await expect(variablesTable(page)).toBeVisible({ timeout: 30000 });
+		await expectVariable(page, key, value);
+		await expect(variableRow(page, key).getByTestId('decrypt')).toBeVisible();
+	});
+
+	test('An encrypted variable cannot be decrypted', async () => {
+		await openEnvironment(page, environmentsUrl, environmentId!, currentEnvironmentName);
+		for (const key of [encryptedVariable.key, encryptedInEnvironment.key]) {
+			const row = variableRow(page, key);
+			const storedValue = await variableValueField(row).inputValue();
+			// The tooltip opens as the pointer enters the icon, so move away and back until it shows.
+			await expect(async () => {
+				await page.mouse.move(0, 0);
+				await row.getByTestId('lock').hover();
+				await expect(page.getByText('Data is encrypted, cannot be decrypted').first()).toBeVisible({ timeout: 1000 });
+			}).toPass({ timeout: 15000 });
+			await row.getByTestId('lock').click();
+			await expectEncryptedRow(page, key);
+			await expect(variableValueField(row)).toHaveValue(storedValue);
+			await expect(page.getByText('You have unsaved changes', { exact: true })).toBeHidden();
+		}
+
+		// Neither the environment nor the project exposes the original value.
+		const inEnvironment = await listEnvironmentVariables(page, projectId!, environmentId!);
+		for (const [key, value] of [[encryptedVariable.key, encryptedVariable.value], [encryptedInEnvironment.key, encryptedInEnvironment.value]]) {
+			const variable = findVariable(inEnvironment, key);
+			expect(variable.isEncrypted).toBe(true);
+			expect(variable.value).not.toContain(value);
+		}
+		expect(findVariable(await listProjectVariables(page, projectId!), encryptedVariable.key).value).not.toContain(encryptedVariable.value);
+	});
+
 	test('Delete the environment', async () => {
 		await openEnvironment(page, environmentsUrl, environmentId!, currentEnvironmentName);
 		await page.getByRole('button', { name: 'Delete environment' }).click();
@@ -317,7 +485,7 @@ test.describe('Verify the CRUD operations of Environment', () => {
 	});
 
 	test('Delete the variables created by this run', async () => {
-		const keys = [renamedVariable.to, ...variables.slice(1).map((variable) => variable.key)];
+		const keys = [renamedVariable.to, ...variables.slice(1).map((variable) => variable.key), encryptedVariable.key, unencryptedVariable.key];
 		await page.goto(environmentsUrl.replace(/\/environments$/, '/environments/variables'));
 		await expect(variablesTable(page)).toBeVisible({ timeout: 30000 });
 
