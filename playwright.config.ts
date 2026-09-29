@@ -7,8 +7,8 @@ if (existsSync('.env')) {
   process.loadEnvFile('.env');
 }
 
-/* Full HD page size for every project; it must come after the device, which sets its own 1280x720 viewport. */
-const viewport = { width: 1920, height: 1080 };
+/* Page size for every project; it must come after the device, which sets its own viewport. */
+const viewport = { width: 1280, height: 720 };
 
 /**
  * See https://playwright.dev/docs/test-configuration.

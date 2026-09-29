@@ -13,6 +13,7 @@ const allCasesSuiteName = 'All test cases included in Tests Suite 1';
 const randomCasesSuiteName = 'Selected random cases in Test Suite 2';
 
 type Suite = { id: number; name: string; totalTestCasesCount: number };
+type TestCase = { id: number; name: string };
 
 // An application of the project, as named in the project switcher, with its Testsigma application type.
 export type SuiteApplication = { name: string; type: string };
@@ -126,11 +127,22 @@ function isSuiteCreate(request: Request) {
 	return request.method() === 'POST' && /\/private\/test_suites$/.test(request.url());
 }
 
-// Adds the chosen test cases to the suite, saves it and checks the saved suite holds exactly those cases.
-async function saveSuite(page: Page, versionId: number, name: string, caseNames: string[]) {
-	await expect(testCasesHeading(page, caseNames.length)).toBeVisible();
+// The same test cases the picker lists: ready, automated test cases of the version that are not step groups.
+async function pickableTestCases(page: Page, versionId: number): Promise<TestCase[]> {
+	const query = `status:READY,afterTestParentId:null,deleted:false,isStepGroup:false,isManual:false,applicationVersionId:${versionId},isEligibleForAfterSuite:false`;
+	const response = await page.request.get(`/private/test_cases?query=${query}&size=500&page=0`);
+	expect(response.ok()).toBe(true);
+	return (await response.json()).content.map(({ id, name }: TestCase) => ({ id, name }));
+}
+
+// Saves the suite with the test cases added to the form and checks it holds exactly those cases.
+async function saveSuite(page: Page, versionId: number, name: string, cases: TestCase[]) {
+	await expect(testCasesHeading(page, cases.length)).toBeVisible();
+	// The form only draws the rows that fit on screen, in the order the cases were selected.
 	const formCases = page.locator('main').getByRole('grid').getByRole('gridcell');
-	await expect(formCases).toHaveText(caseNames, { useInnerText: true });
+	await expect(formCases.first()).toBeVisible();
+	const shownCases = await formCases.allInnerTexts();
+	expect(cases.map((testCase) => testCase.name)).toEqual(expect.arrayContaining(shownCases.map((text) => text.trim())));
 
 	const createButton = page.getByRole('button', { name: 'Create', exact: true });
 	// A suite needs both a name and at least one test case.
@@ -145,9 +157,9 @@ async function saveSuite(page: Page, versionId: number, name: string, caseNames:
 	expect(response.status()).toBe(201);
 	const body = request.postDataJSON();
 	expect(body).toMatchObject({ name, appVersionId: versionId });
-	expect(body.testCaseIds).toHaveLength(caseNames.length);
+	expect([...body.testCaseIds].sort()).toEqual(cases.map((testCase) => testCase.id).sort());
 	const created: Suite = await response.json();
-	expect(created).toMatchObject({ name, totalTestCasesCount: caseNames.length });
+	expect(created).toMatchObject({ name, totalTestCasesCount: cases.length });
 
 	await expect(page.getByText('Test Suite created successfully').first()).toBeVisible();
 	await expect(page).toHaveURL(new RegExp(`/td/${versionId}/suites$`), { timeout: 30000 });
@@ -158,7 +170,7 @@ async function saveSuite(page: Page, versionId: number, name: string, caseNames:
 
 	// The suite is stored with the chosen test cases.
 	const stored = await (await page.request.get(`/private/test_suites/${created.id}`)).json();
-	expect(stored).toMatchObject({ name, appVersionId: versionId, totalTestCasesCount: caseNames.length });
+	expect(stored).toMatchObject({ name, appVersionId: versionId, totalTestCasesCount: cases.length });
 	return created;
 }
 
@@ -316,45 +328,50 @@ export async function createSuiteWithAllCases(page: Page, versionId: number) {
 	await openTestSuites(page, versionId);
 	await openCreateTestSuite(page, versionId);
 	const picker = await openTestCasePicker(page);
-	const total = await availableCaseCount(picker);
-	const caseNames = await availableCaseCheckboxes(picker).evaluateAll((boxes) => boxes.map((box) => box.getAttribute('aria-label')!.replace(/^Select /, '')));
-	// Every available test case is listed, so selecting all of them is checked against the full list.
-	expect(caseNames).toHaveLength(total);
+	const cases = await pickableTestCases(page, versionId);
+	await expect(picker.getByText(`Available Test Cases (${cases.length})`, { exact: true })).toBeVisible();
 
 	await picker.getByRole('checkbox', { name: 'Select All', exact: true }).first().check();
-	await expect(availableCaseCheckboxes(picker)).toHaveCount(total);
+	// The list only draws the rows that fit on screen; each drawn row is checked.
 	for (const checkbox of await availableCaseCheckboxes(picker).all()) {
 		await expect(checkbox).toBeChecked();
 	}
 	await picker.getByRole('button', { name: 'Select', exact: true }).click();
-	await expect(picker.getByText(`Selected for Test Suite (${total})`, { exact: true })).toBeVisible();
+	await expect(picker.getByText(`Selected for Test Suite (${cases.length})`, { exact: true })).toBeVisible();
 	await picker.getByRole('button', { name: 'Add to Suite', exact: true }).click();
 	await expect(picker.getByText('Add/Remove Test Cases', { exact: true })).toBeHidden();
 
-	await saveSuite(page, versionId, allCasesSuiteName, caseNames);
+	await saveSuite(page, versionId, allCasesSuiteName, cases);
 }
 
 export async function createSuiteWithRandomCases(page: Page, { name: applicationName }: SuiteApplication, versionId: number) {
 	await openTestSuites(page, versionId);
 	await openCreateTestSuite(page, versionId);
 	const picker = await openTestCasePicker(page);
-	const available = await availableCaseCheckboxes(picker).evaluateAll((boxes) => boxes.map((box) => box.getAttribute('aria-label')!.replace(/^Select /, '')));
+	const available = await pickableTestCases(page, versionId);
 	expect(available.length, `${applicationName} version ${versionName} needs at least 5 ready, automated test cases to pick from`).toBeGreaterThanOrEqual(5);
 	const count = 4 + Math.floor(Math.random() * 2);
 	const chosen = [...available].sort(() => Math.random() - 0.5).slice(0, count);
-	// Keep the list order, which is the order the form shows them in.
-	const caseNames = available.filter((name) => chosen.includes(name));
-	test.info().annotations.push({ type: 'Selected test cases', description: caseNames.join(', ') });
+	test.info().annotations.push({ type: 'Selected test cases', description: chosen.map((testCase) => testCase.name).join(', ') });
 
-	for (const name of caseNames) {
-		await picker.getByRole('checkbox', { name: `Select ${name}`, exact: true }).first().check();
+	// The list only draws the rows that fit on screen, so search for each chosen case and move it across.
+	// Once a case is selected the right-hand list gets a search box too; the left one comes first.
+	await picker.getByTestId('search').first().click();
+	const search = picker.getByRole('textbox', { name: 'Search' }).first();
+	for (const [index, testCase] of chosen.entries()) {
+		await search.fill(testCase.name);
+		const checkbox = availableCaseCheckboxes(picker).and(picker.getByRole('checkbox', { name: `Select ${testCase.name}`, exact: true }));
+		await expect(checkbox).toBeVisible();
+		await checkbox.check();
+		await picker.getByRole('button', { name: 'Select', exact: true }).click();
+		await expect(picker.getByText(`Selected for Test Suite (${index + 1})`, { exact: true })).toBeVisible();
 	}
-	await picker.getByRole('button', { name: 'Select', exact: true }).click();
-	await expect(picker.getByText(`Selected for Test Suite (${caseNames.length})`, { exact: true })).toBeVisible();
+	await search.clear();
+	await expect(picker.getByText(`Available Test Cases (${available.length})`, { exact: true })).toBeVisible();
 	await picker.getByRole('button', { name: 'Add to Suite', exact: true }).click();
 	await expect(picker.getByText('Add/Remove Test Cases', { exact: true })).toBeHidden();
 
-	await saveSuite(page, versionId, randomCasesSuiteName, caseNames);
+	await saveSuite(page, versionId, randomCasesSuiteName, chosen);
 	// Both suites of this run are listed, and the list view has its search, filters and columns.
 	const main = page.locator('main');
 	for (const name of [allCasesSuiteName, randomCasesSuiteName]) {
