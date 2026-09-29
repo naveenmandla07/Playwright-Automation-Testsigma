@@ -7,6 +7,9 @@ if (existsSync('.env')) {
   process.loadEnvFile('.env');
 }
 
+/* Full HD page size for every project; it must come after the device, which sets its own 1280x720 viewport. */
+const viewport = { width: 1920, height: 1080 };
+
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
@@ -42,7 +45,7 @@ export default defineConfig({
     {
       name: 'chromium',
       testIgnore: /Create Project and select the Created Project|Test Data_TDP/,
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'], viewport },
     },
     {
       /* The account's current project is shared server-side: these tests either switch it or read data scoped to it,
@@ -50,7 +53,7 @@ export default defineConfig({
       name: 'chromium-projects',
       testMatch: /(Create Project and select the Created Project|Test Data_TDP)\/.*\.spec\.ts/,
       workers: 1,
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'], viewport },
     },
   ],
 
