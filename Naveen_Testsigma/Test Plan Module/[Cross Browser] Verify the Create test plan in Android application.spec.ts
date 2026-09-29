@@ -1,18 +1,19 @@
 /**
- * Creating a cross browser test plan for the web application of the "[9.0.8] Accessibility" project.
+ * Creating a cross browser test plan for the Android application of the "[9.0.8] Accessibility" project.
  *
  * Scenarios (run in order, sharing one signed-in page and one Create Test Plan wizard):
- * - Switch to the "[9.0.8] Accessibility" project, its "Web App" application and version "1".
+ * - Switch to the "[9.0.8] Accessibility" project, its "Android" application and version "1".
  * - Open the Test Plans module and check its page.
  * - Basic Details: check the step, choose "Cross browser testing" and enter the name, description and labels.
- * - Add Test Suites: add the two suites created by the web test suite spec.
- * - Link Machine Profiles: link the pre-defined "Windows Chrome" profile and a new user-defined profile.
+ * - Add Test Suites: add "All test cases included in Tests Suite 1", created by the Android test suite spec.
+ * - Link Machine Profiles: Android has no pre-defined profiles, so create two user-defined ones, the second on a
+ *   different device from the first.
  * - Test Plan Settings: turn on notifications for passed and failed runs, sent to naveen.mandla@testsigma.com.
  * - Create the test plan and check what was saved.
  *
- * Needs the suites from "Verify the Create test suites in web application.spec.ts". The plan is kept after the
- * run so it can be reviewed; a run first deletes a plan left with the same name by an earlier run. Runs in the
- * serial chromium-projects project because it changes the account's current project.
+ * Needs the suite from "Verify the Create test suites in android application.spec.ts". The plan is kept after
+ * the run so it can be reviewed; a run first deletes a plan left with the same name by an earlier run. Runs in
+ * the serial chromium-projects project because it changes the account's current project.
  */
 import { test } from '@playwright/test';
 import {
@@ -28,25 +29,25 @@ import {
 import { openSignedInPage, projectName, suiteNames, switchToApplication, versionName } from '../support/create-test-suites';
 
 const plan: PlanScenario = {
-	application: { name: 'Web App', type: 'WebApplication' },
-	suiteSpec: 'Verify the Create test suites in web application.spec.ts',
-	name: 'Cross browser test plan for Web App',
+	application: { name: 'Android', type: 'AndroidNative' },
+	suiteSpec: 'Verify the Create test suites in android application.spec.ts',
+	name: 'Cross browser test plan for Android',
 	description: 'Cross browser test plan created by the Testsigma Playwright automation suite.',
-	labels: ['cross-browser', 'web-app'],
-	suites: [suiteNames.allCases, suiteNames.randomCases],
-	predefinedCatalog: ['Windows Firefox', 'Windows Chrome', 'Mac Chrome', 'Windows Edge', 'Mac Safari'],
-	predefinedMachines: ['Windows Chrome'],
-	userDefinedMachines: [{ name: 'User-defined Web Machine' }],
+	labels: ['cross-browser', 'android'],
+	suites: [suiteNames.allCases],
+	predefinedCatalog: [],
+	predefinedMachines: [],
+	userDefinedMachines: [{ name: 'User-defined Android Device 1' }, { name: 'User-defined Android Device 2', otherDevice: true }],
 	machineForm: {
-		labels: ['Pre-requisite test machine', 'Test Lab', 'Test Machine', 'OS & Version', 'Browser', 'Resolution', 'Parallel Settings'],
-		checked: ['Run test suites in parallel', 'Reset session for every test case'],
-		unchecked: ['Headless Test'],
+		labels: ['Test Lab', 'Test Machine', 'OS & Version', 'Device', 'App Source', 'Uploads', 'Parallel Settings', 'Select backup devices', 'Pre-requisites'],
+		checked: ['Reset session for every test case'],
+		unchecked: ['Run test cases inside test suite in parallel', 'Reset session for every iterations in data driven test case', 'Camera image injection', 'Network logs'],
 	},
 	notifyOn: ['Passed', 'Failed'],
 	notificationEmail: 'naveen.mandla@testsigma.com',
 };
 
-test.describe('Verify the Create test plan in Web application', () => {
+test.describe('Verify the Create test plan in Android application', () => {
 	test.describe.configure({ mode: 'serial', timeout: 240000 });
 	test.skip(!process.env.TESTSIGMA_EMAIL || !process.env.TESTSIGMA_PASSWORD, 'Set TESTSIGMA_EMAIL and TESTSIGMA_PASSWORD in .env to run this test.');
 
@@ -73,11 +74,11 @@ test.describe('Verify the Create test plan in Web application', () => {
 		await fillBasicDetails(run, plan);
 	});
 
-	test('Add Test Suites: add both web test suites', async () => {
+	test('Add Test Suites: add the Android test suite', async () => {
 		await addTestSuites(run, plan);
 	});
 
-	test('Link Machine Profiles: one pre-defined and one user-defined test machine', async () => {
+	test('Link Machine Profiles: two user-defined test machines', async () => {
 		await linkMachineProfiles(run, plan);
 	});
 
