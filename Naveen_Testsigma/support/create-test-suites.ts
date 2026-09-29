@@ -39,7 +39,7 @@ async function signIn(page: Page) {
 
 // The side navigation only shows labels while hovered. Moving onto the spot the pointer is already on does not
 // count as hovering, so move away first.
-async function hoverNavigation(page: Page, y: number) {
+export async function hoverNavigation(page: Page, y: number) {
 	await page.mouse.move(800, 500);
 	await page.mouse.move(20, y);
 }
