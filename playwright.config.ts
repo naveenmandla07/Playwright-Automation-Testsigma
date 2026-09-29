@@ -44,14 +44,14 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testIgnore: /Create Project and select the Created Project|Test Data_TDP/,
+      testIgnore: /Create Project and select the Created Project|Test Data_TDP|Test Suite Module/,
       use: { ...devices['Desktop Chrome'], viewport },
     },
     {
       /* The account's current project is shared server-side: these tests either switch it or read data scoped to it,
          so run them one at a time. */
       name: 'chromium-projects',
-      testMatch: /(Create Project and select the Created Project|Test Data_TDP)\/.*\.spec\.ts/,
+      testMatch: /(Create Project and select the Created Project|Test Data_TDP|Test Suite Module)\/.*\.spec\.ts/,
       workers: 1,
       use: { ...devices['Desktop Chrome'], viewport },
     },
