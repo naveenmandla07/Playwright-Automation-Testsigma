@@ -36,7 +36,14 @@ async function signIn(page: Page) {
 	await expect(page.getByRole('button', { name: 'Share Feedback' })).toBeVisible({ timeout: 30000 });
 }
 
-// The side navigation only shows labels while hovered; its second button opens the project switcher.
+// The side navigation only shows labels while hovered. Moving onto the spot the pointer is already on does not
+// count as hovering, so move away first.
+async function hoverNavigation(page: Page, y: number) {
+	await page.mouse.move(800, 500);
+	await page.mouse.move(20, y);
+}
+
+// The side navigation's second button opens the project switcher.
 function projectSwitcherButton(page: Page) {
 	return page.getByRole('navigation').getByRole('button').nth(1);
 }
@@ -72,7 +79,7 @@ async function deleteSuitesNamed(page: Page, versionId: number, name: string) {
 }
 
 async function openTestSuites(page: Page, versionId: number) {
-	await page.mouse.move(20, 300);
+	await hoverNavigation(page, 300);
 	await page.getByRole('link', { name: 'Test Suites', exact: true }).click();
 	await expect(page).toHaveURL(new RegExp(`/td/${versionId}/suites$`), { timeout: 30000 });
 	await expect(page.getByRole('heading', { name: 'Test Suites', level: 1 })).toBeVisible({ timeout: 30000 });
@@ -182,7 +189,7 @@ export async function switchToApplication(page: Page, { name: applicationName }:
 	// Dismissing the news-notification prompt closes the switcher, so start over whenever it closes midway.
 	await expect(async () => {
 		if (!(await project.isVisible())) {
-			await page.mouse.move(20, 100);
+			await hoverNavigation(page, 100);
 			await projectSwitcherButton(page).click(quickly);
 			await expect(project).toBeVisible(quickly);
 		}
@@ -214,7 +221,7 @@ export async function switchToApplication(page: Page, { name: applicationName }:
 	}).toPass({ timeout: 90000 });
 
 	await page.reload();
-	await page.mouse.move(20, 100);
+	await hoverNavigation(page, 100);
 	await expect(projectSwitcherButton(page)).toHaveText(projectName, { timeout: 30000 });
 	await projectSwitcherButton(page).click();
 	await expect(project).toHaveText(projectName);
