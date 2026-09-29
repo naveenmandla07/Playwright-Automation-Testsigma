@@ -24,8 +24,8 @@ import {
 	verifyTestPlansPage,
 	type PlanRun,
 	type PlanScenario,
-} from '../support/create-test-plans';
-import { openSignedInPage, projectName, suiteNames, switchToApplication, versionName } from '../support/create-test-suites';
+} from '../../support/create-test-plans';
+import { openSignedInPage, projectName, suiteNames, switchToApplication, versionName } from '../../support/create-test-suites';
 
 const plan: PlanScenario = {
 	application: { name: 'Salesforce', type: 'Salesforce' },
