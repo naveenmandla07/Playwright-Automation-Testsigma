@@ -406,8 +406,9 @@ export async function fillBasicDetails(run: PlanRun, plan: PlanScenario) {
 		// The first click anywhere only closes the suggestions, so close them before removing the chip.
 		await main.getByText('Test Plan Type', { exact: true }).click();
 		await labelChip(page, discardedLabel).locator('..').getByTestId(/^remove-button-/).click();
-		// The plan's own labels are checked, and put back if the form dropped them, before leaving the step.
 		await expect(labelChip(page, discardedLabel)).toHaveCount(0);
+		// The plan's own labels are not checked here: the form can drop them as it re-renders, and the step that
+		// leaves Basic Details checks them and puts back any that were lost.
 	});
 
 	await step(page, 'Cancel asks before leaving the wizard', async () => {
@@ -469,7 +470,7 @@ async function openSuitePicker(page: Page, available: number, selected = 0) {
 	return picker;
 }
 
-// The picker's checkboxes toggle through their labels; clicking the text next to one ticks it.
+// Ticks a suite's checkbox in whichever of the picker's lists it is.
 async function tickSuite(picker: Locator, suite: string) {
 	const checkbox = pickerSuite(picker, suite);
 	await expect(checkbox).toBeVisible();
@@ -564,6 +565,8 @@ export async function addTestSuites(run: PlanRun, plan: PlanScenario) {
 		await closePickerPopover(picker);
 		await expect(picker.getByRole('checkbox', { name: suiteFilters[0], exact: true })).toBeHidden();
 
+		const visibleCheckboxes = picker.getByRole('checkbox').filter({ visible: true });
+		const shownBefore = await visibleCheckboxes.count();
 		for (const filter of suiteFilters) {
 			await picker.getByText(filter, { exact: true }).first().click();
 			if (filter === 'Last Run Result') {
@@ -577,10 +580,11 @@ export async function addTestSuites(run: PlanRun, plan: PlanScenario) {
 			} else {
 				// Test Case, Created By and Labels list their options under a search box.
 				await expect(visibleSearchBoxes(picker)).toHaveCount(1);
-				await expect(picker.getByRole('checkbox').filter({ visible: true }).nth(1)).toBeVisible();
+				await expect.poll(() => visibleCheckboxes.count(), `options of ${filter}`).toBeGreaterThan(shownBefore);
 			}
 			await closePickerPopover(picker);
 			await expect(visibleSearchBoxes(picker)).toHaveCount(0);
+			await expect(visibleCheckboxes).toHaveCount(shownBefore);
 			await expect(picker.getByRole('button', { name: currentMonth(), exact: true })).toHaveCount(0);
 		}
 	});
@@ -1009,8 +1013,11 @@ export async function fillPlanSettings(run: PlanRun, plan: PlanScenario) {
 	await step(page, 'Check the post plan hook offers no addon', async () => {
 		const addon = dropdown(main, 'Addon');
 		await expect(addon).toHaveText('None');
+		// The open list adds its own "None" beside the ones the dropdowns already show.
+		const nones = main.getByText('None', { exact: true }).filter({ visible: true });
+		const shownBefore = await nones.count();
 		await openDropdown(addon);
-		await expect(main.getByText('None', { exact: true }).last()).toBeVisible();
+		await expect(nones).toHaveCount(shownBefore + 1);
 		await closeDropdown(addon, main.getByText('Post Plan Hook', { exact: true }));
 		await expect(addon).toHaveText('None');
 	});
@@ -1136,9 +1143,11 @@ export async function verifyPlanInList(run: PlanRun, plan: PlanScenario) {
 	});
 
 	await step(page, 'Check the sort options', async () => {
+		// "Name" is also a column heading, so each option must add one more of its text to the page.
+		const shownBefore = await Promise.all(sortOptions.map((option) => main.getByText(option, { exact: true }).filter({ visible: true }).count()));
 		await main.getByText('Sort by', { exact: true }).click();
-		for (const option of sortOptions) {
-			await expect(main.getByText(option, { exact: true }).last()).toBeVisible();
+		for (const [index, option] of sortOptions.entries()) {
+			await expect(main.getByText(option, { exact: true }).filter({ visible: true })).toHaveCount(shownBefore[index] + 1);
 		}
 		await page.keyboard.press('Escape');
 	});
