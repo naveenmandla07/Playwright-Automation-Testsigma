@@ -3,11 +3,21 @@
  * "[9.0.8] Accessibility" project has its own spec, which declares the tests, describes its plan as a
  * PlanScenario and runs these steps for it.
  */
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page, type Request } from '@playwright/test';
 import { hoverNavigation, type SuiteApplication } from './create-test-suites';
 
 // A user-defined machine profile; otherDevice puts it on a device no earlier profile of the plan uses.
 export type UserDefinedMachine = { name: string; otherDevice?: boolean };
+
+// What the first user-defined profile changes from the Add Machine form's defaults, and what the saved profile
+// must then hold.
+export type MachineChoices = {
+	// An OS version picked from the OS & Version menu, e.g. "Windows 10".
+	os?: string;
+	resolution?: string;
+	turnOn: string[];
+	saved: Record<string, unknown>;
+};
 
 export type PlanScenario = {
 	application: SuiteApplication;
@@ -23,6 +33,7 @@ export type PlanScenario = {
 	userDefinedMachines: UserDefinedMachine[];
 	// The Add Machine form's field labels and which of its checkboxes start checked or unchecked.
 	machineForm: { labels: string[]; checked: string[]; unchecked: string[] };
+	machineChoices: MachineChoices;
 	notifyOn: string[];
 	notificationEmail: string;
 	// Settings fields only this application's plans have, e.g. a Salesforce connection.
@@ -30,14 +41,54 @@ export type PlanScenario = {
 };
 
 // What one run of the scenario learns along the way.
-export type PlanRun = { page: Page; versionId: number; suiteIds: Map<string, number>; planId: number };
+// environment is the one chosen in the settings, when the project has any.
+export type PlanRun = { page: Page; versionId: number; suiteIds: Map<string, number>; planId: number; environment?: string };
 
 type Plan = { id: number; name: string };
-type PlanMachine = { id: number; title: string; suiteIds: number[]; isPredefined: boolean; platformDeviceId: string | null };
+type PlanMachine = { id: number; title: string; suiteIds: number[]; isPredefined: boolean; platformDeviceId: string | null } & Record<string, unknown>;
 
 const wizardSteps = ['Basic Details', 'Add Test Suites & Link Machine Profiles', 'Test Plan Settings'];
 const testLabs = ['Testsigma Lab', 'Local Devices', 'Lambda Test', 'Sauce Labs', 'BrowserStack'];
 const notificationStatuses = ['Passed', 'Failed', 'Not Executed', 'Queued', 'Stopped', 'Running'];
+
+// A label added and then removed again, so it must not be saved with the plan.
+const discardedLabel = 'discarded-label';
+const invalidEmail = 'not-an-email';
+const cancelledMachine = 'Cancelled machine profile';
+const noResults = 'No results found for this search criteria';
+
+// The Add Test Suites picker's filters and, where they are fixed, the options each offers.
+const suiteFilters = ['Test Case', 'Last Run Result', 'Created By', 'Created Date', 'Updated Date', 'Last Run Date', 'Labels', 'Linked To'];
+const lastRunResults = ['SUCCESS', 'FAILURE', 'ABORTED', 'NOT_EXECUTED', 'PRE_REQUISITE_FAILURE', 'QUEUED', 'STOPPED', 'PAUSED', 'SKIPPED', 'RUNNING'];
+const dateFilters = ['Created Date', 'Updated Date', 'Last Run Date'];
+
+const sortOptions = ['Name', 'Created Date', 'Updated Date', 'A to Z', 'Z to A'];
+const screenshotOptions = ['For all steps', 'Only for failed Steps', 'No screenshot required', 'Use step level settings'];
+const timeouts = { page: '60', step: '45', tooLong: '150' };
+
+// Each recovery action with its two choices; the plan takes the second choice of each instead of the default.
+const recoveryActions = [
+	{ when: 'On Major Step Failure', choices: ['Abort and run next Test Case', 'Report and continue to next Test Step'] },
+	{ when: 'On Test Step Pre-Requisite Failure', choices: ['Abort and run next Test Case', 'Report and continue to next Test Step'] },
+	{ when: 'On Test Case Pre-Requisite Failure', choices: ['Abort Dependent Test Cases', 'Report and continue to next Test Case'] },
+	{ when: 'On Test Suite Pre-Requisite Failure', choices: ['Abort Dependent Test Suites', 'Report and continue to next Test Suite'] },
+	{ when: 'On Test Machine Pre-Requisite Failure', choices: ['Abort Dependent Test Machines', 'Report and continue to next Test Machine'] },
+];
+const rerunChoices = ['None', 'All Test Cases', 'Only Failed Test Cases'];
+
+// The settings the plan is saved with once those choices are made.
+const savedSettings = {
+	pageTimeOut: Number(timeouts.page),
+	stepTimeOut: Number(timeouts.step),
+	enforceTimeOut: true,
+	screenshot: 'FAILED_STEPS',
+	recoveryAction: 'Run_Next_Step',
+	onStepPreRequisiteFail: 'Run_Next_Step',
+	onSuitePreRequisiteFail: 'Continue',
+	onMachinePreRequisiteFail: 'Continue',
+	reRunType: 'ONLY_FAILED_TESTS',
+	isAccessibilityTestEnabled: true,
+};
 
 // Runs one part of the scenario and, when it fails, attaches a screenshot and names the part that failed.
 async function step(page: Page, name: string, body: () => Promise<void>) {
@@ -75,7 +126,7 @@ async function suiteIdsByName(page: Page, versionId: number) {
 async function turnOn(scope: Locator, page: Page, name: string) {
 	const checkbox = scope.getByRole('checkbox', { name, exact: true });
 	if (!(await checkbox.isChecked())) {
-		await scope.locator('label').filter({ has: page.getByRole('checkbox', { name, exact: true }) }).click();
+		await toggle(scope, page, name).click();
 	}
 	await expect(checkbox).toBeChecked();
 }
@@ -100,6 +151,34 @@ function fieldLabel(scope: Locator, label: string) {
 // Machine cards show how many suites they run, e.g. "2 Suites".
 function suiteCount(count: number) {
 	return new RegExp(`^${count} Suites?$`);
+}
+
+// A dropdown sits next to its label and shows the chosen value; it reports whether it is open in data-isopen.
+function dropdown(scope: Locator, label: string) {
+	return fieldLabel(scope, label).locator('..').locator('[data-isopen]').first();
+}
+
+async function openDropdown(field: Locator) {
+	await field.click();
+	await expect(field).toHaveAttribute('data-isopen', 'true');
+}
+
+// Escape leaves a dropdown open, and clicking the dropdown again can land on one of its options, so close it by
+// clicking a heading next to it.
+async function closeDropdown(field: Locator, heading: Locator) {
+	await heading.click();
+	await expect(field).toHaveAttribute('data-isopen', 'false');
+}
+
+// Radio buttons are hidden behind their labels, so choose one by clicking its text.
+async function choose(scope: Locator, name: string) {
+	await scope.getByText(name, { exact: true }).click();
+	await expect(scope.getByRole('radio', { name, exact: true })).toBeChecked();
+}
+
+// The label switch of a toggle, which is what takes the click; see turnOn.
+function toggle(scope: Locator, page: Page, name: string) {
+	return scope.locator('label').filter({ has: page.getByRole('checkbox', { name, exact: true }) });
 }
 
 async function expectWizardSteps(page: Page) {
@@ -266,6 +345,32 @@ export async function fillBasicDetails(run: PlanRun, plan: PlanScenario) {
 		await expect(main.getByText('Manually add test machine profiles to individual test suites', { exact: true })).toBeVisible();
 	});
 
+	await step(page, 'A plan cannot be created without a name', async () => {
+		// The wizard lets every step be passed without a name and only checks it on Create, which sends the
+		// user back to Basic Details instead of saving the plan.
+		const creates: string[] = [];
+		const recordCreate = (request: Request) => {
+			if (request.method() === 'POST' && /\/executions$/.test(new URL(request.url()).pathname)) {
+				creates.push(request.url());
+			}
+		};
+		page.on('request', recordCreate);
+		try {
+			await main.getByRole('button', { name: 'Continue', exact: true }).click();
+			await expect(main.getByText('Test Suites (0)', { exact: true })).toBeVisible({ timeout: 30000 });
+			await main.getByRole('button', { name: 'Continue', exact: true }).click();
+			await expect(main.getByRole('checkbox', { name: 'Send Notification', exact: true })).toBeAttached({ timeout: 30000 });
+			await main.getByRole('button', { name: 'Create', exact: true }).click();
+			await expect(main.getByText('Name is required', { exact: true })).toBeVisible({ timeout: 30000 });
+			await expect(main.getByRole('textbox', { name: 'Name', exact: true })).toBeEmpty();
+			await expect(main.getByRole('button', { name: 'Continue', exact: true })).toBeVisible();
+		} finally {
+			page.off('request', recordCreate);
+		}
+		expect(creates, 'plans created without a name').toEqual([]);
+		expect((await listPlans(page, versionId)).some((item) => !item.name)).toBe(false);
+	});
+
 	await step(page, 'Choose the Cross browser testing plan type', async () => {
 		const crossBrowser = main.getByRole('radio', { name: /^Cross browser testing/ });
 		const custom = main.getByRole('radio', { name: /^Custom test plan/ });
@@ -281,10 +386,40 @@ export async function fillBasicDetails(run: PlanRun, plan: PlanScenario) {
 
 	await step(page, 'Enter the name and description', async () => {
 		await enterNameAndDescription(page, plan);
+		await expect(main.getByText('Name is required', { exact: true })).toBeHidden();
 	});
 
 	await step(page, 'Add the labels', async () => {
 		await addMissingLabels(page, plan);
+	});
+
+	await step(page, 'Add a label with "+ Add" and remove it again', async () => {
+		const labels = main.getByRole('textbox', { name: 'Labels', exact: true });
+		// "+ Add" is offered in the suggestions, which open when the box is clicked and follow the label as it is
+		// typed; filling the box in one go does not update them.
+		await page.keyboard.press('Escape');
+		await labels.click();
+		await labels.pressSequentially(discardedLabel);
+		await main.getByRole('button', { name: '+ Add' }).click();
+		await expect(labels).toBeEmpty();
+		await expect(labelChip(page, discardedLabel)).toBeVisible();
+		// The first click anywhere only closes the suggestions, so close them before removing the chip.
+		await main.getByText('Test Plan Type', { exact: true }).click();
+		await labelChip(page, discardedLabel).locator('..').getByTestId(/^remove-button-/).click();
+		// The plan's own labels are checked, and put back if the form dropped them, before leaving the step.
+		await expect(labelChip(page, discardedLabel)).toHaveCount(0);
+	});
+
+	await step(page, 'Cancel asks before leaving the wizard', async () => {
+		await main.getByRole('button', { name: 'Cancel', exact: true }).click();
+		const confirm = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'Leave test plan creation?' }) });
+		await expect(confirm.getByText('You will lose all your progress and all changes will be discarded.')).toBeVisible();
+		await expect(confirm.getByRole('button', { name: 'Leave', exact: true })).toBeEnabled();
+		// Staying keeps everything entered so far.
+		await confirm.getByRole('button', { name: 'Cancel', exact: true }).click();
+		await expect(confirm).toBeHidden();
+		await expect(page).toHaveURL(new RegExp(`/td/${versionId}/plans/new$`));
+		await expect(main.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue(plan.name);
 	});
 
 	await step(page, 'Continue to Add Test Suites', async () => {
@@ -304,9 +439,74 @@ export async function fillBasicDetails(run: PlanRun, plan: PlanScenario) {
 	});
 }
 
+function suitePicker(page: Page) {
+	return overlay(page, 'Add Test Suites to plan', 'Add to Plan');
+}
+
+// Each suite in the picker has a checkbox named after it, in whichever of its two lists it is.
+function pickerSuite(picker: Locator, suite: string) {
+	// "Select All" would also match "Select All test cases…", so match each name exactly.
+	return picker.getByRole('checkbox', { name: `Select ${suite}`, exact: true }).first();
+}
+
+function selectAll(picker: Locator, list: 'available' | 'selected') {
+	const checkboxes = picker.getByRole('checkbox', { name: 'Select All', exact: true });
+	return list === 'available' ? checkboxes.first() : checkboxes.last();
+}
+
+async function expectPickerCounts(picker: Locator, available: number, selected: number) {
+	await expect(picker.getByText(`Available Test Suites (${available})`, { exact: true })).toBeVisible({ timeout: 30000 });
+	await expect(picker.getByText(`Selected for Test plan (${selected})`, { exact: true })).toBeVisible();
+}
+
+// Suites already in the plan open in the selected list.
+async function openSuitePicker(page: Page, available: number, selected = 0) {
+	const picker = suitePicker(page);
+	// The link beside the suites heading is there whether or not the plan has suites yet; the button under an
+	// empty list is not.
+	await wizard(page).getByText('Add Test Suites', { exact: true }).first().click();
+	await expectPickerCounts(picker, available, selected);
+	return picker;
+}
+
+// The picker's checkboxes toggle through their labels; clicking the text next to one ticks it.
+async function tickSuite(picker: Locator, suite: string) {
+	const checkbox = pickerSuite(picker, suite);
+	await expect(checkbox).toBeVisible();
+	await checkbox.check();
+	await expect(checkbox).toBeChecked();
+}
+
+// Each suite row of the plan has a menu, behind its three-dot icon, to manage or remove the suite.
+function planSuiteMenu(page: Page, suite: string) {
+	return wizard(page).getByText(suite, { exact: true }).first()
+		.locator('xpath=ancestor::div[.//*[@data-testid="more-vertical"]][1]')
+		.getByTestId('more-vertical');
+}
+
+// A filter's options open in a popover under its name; the search-based ones show a search box of their own.
+function visibleSearchBoxes(picker: Locator) {
+	return picker.getByRole('textbox', { name: 'Search' }).filter({ visible: true });
+}
+
+// The picker's popovers ignore Escape and close on a click elsewhere, such as on the picker's title.
+async function closePickerPopover(picker: Locator) {
+	await picker.getByText('Add Test Suites to plan', { exact: true }).click();
+}
+
+function currentMonth() {
+	return new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
+}
+
 export async function addTestSuites(run: PlanRun, plan: PlanScenario) {
 	const { page } = run;
 	const main = wizard(page);
+	const picker = suitePicker(page);
+	// Every suite of the version is offered; the plan keeps only its own.
+	const allSuites = [...run.suiteIds.keys()];
+	const extraSuites = allSuites.filter((suite) => !plan.suites.includes(suite));
+	const readdedSuite = plan.suites[plan.suites.length - 1];
+	const removedSuites = [...extraSuites, readdedSuite];
 
 	await step(page, 'Check the empty suites list', async () => {
 		await expect(main.getByText('No Test Suite has been added to this plan', { exact: true })).toBeVisible();
@@ -314,42 +514,234 @@ export async function addTestSuites(run: PlanRun, plan: PlanScenario) {
 		await expect(main.getByRole('button', { name: 'Add Test Suites' })).toBeEnabled();
 	});
 
-	const modal = overlay(page, 'Add Test Suites to plan', 'Add to Plan');
-	await step(page, 'Open and check the Add Test Suites picker', async () => {
-		await main.getByRole('button', { name: 'Add Test Suites' }).click();
-		await expect(modal.getByText(/^Available Test Suites \(\d+\)$/)).toBeVisible({ timeout: 30000 });
-		await expect(modal.getByText('Add Filters', { exact: true })).toBeVisible();
-		await expect(modal.getByText('Selected for Test plan (0)', { exact: true })).toBeVisible();
-		await expect(modal.getByText('No Test Suite has been added to this plan', { exact: true })).toBeVisible();
-		await expect(modal.getByRole('button', { name: 'Select', exact: true })).toBeDisabled();
-		await expect(modal.getByRole('button', { name: 'Remove', exact: true })).toBeDisabled();
-		await expect(modal.getByRole('button', { name: 'Add to Plan' })).toBeDisabled();
-		await expect(modal.getByRole('button', { name: 'Cancel', exact: true })).toBeEnabled();
+	await step(page, 'Cancelling the picker adds nothing', async () => {
+		await openSuitePicker(page, allSuites.length);
+		await tickSuite(picker, plan.suites[0]);
+		await picker.getByRole('button', { name: 'Select', exact: true }).click();
+		await expectPickerCounts(picker, allSuites.length - 1, 1);
+		await picker.getByRole('button', { name: 'Cancel', exact: true }).click();
+		await expect(page.getByText('Add Test Suites to plan', { exact: true })).toBeHidden();
+		await expect(main.getByText('Test Suites (0)', { exact: true })).toBeVisible();
+		await expect(main.getByText('No Test Suite has been added to this plan', { exact: true })).toBeVisible();
 	});
 
-	await step(page, `Select ${plan.suites.length === 1 ? 'the suite' : `the ${plan.suites.length} suites`}`, async () => {
-		for (const suite of plan.suites) {
-			// "Select All" would also match "Select All test cases…", so match each name exactly.
-			const checkbox = modal.getByRole('checkbox', { name: `Select ${suite}`, exact: true }).first();
-			await expect(checkbox).toBeVisible();
+	await step(page, 'Open and check the Add Test Suites picker', async () => {
+		await openSuitePicker(page, allSuites.length);
+		await expect(picker.getByText('Add Filters', { exact: true })).toBeVisible();
+		for (const suite of allSuites) {
+			await expect(pickerSuite(picker, suite)).not.toBeChecked();
+		}
+		await expect(picker.getByRole('img', { name: 'No test suites selected illustration' })).toBeVisible();
+		await expect(picker.getByText('No Test Suite has been added to this plan', { exact: true })).toBeVisible();
+		await expect(picker.getByRole('button', { name: 'Select', exact: true })).toBeDisabled();
+		await expect(picker.getByRole('button', { name: 'Remove', exact: true })).toBeDisabled();
+		await expect(picker.getByRole('button', { name: 'Add to Plan' })).toBeDisabled();
+		await expect(picker.getByRole('button', { name: 'Cancel', exact: true })).toBeEnabled();
+	});
+
+	await step(page, 'Search the available suites', async () => {
+		// The search box stays collapsed until its icon is clicked.
+		await picker.getByTestId('search').first().click();
+		const search = picker.getByRole('textbox', { name: 'Search' }).first();
+		await search.fill(plan.suites[0]);
+		await expectPickerCounts(picker, 1, 0);
+		await expect(pickerSuite(picker, plan.suites[0])).toBeVisible();
+		await search.fill('zz-no-such-suite');
+		await expectPickerCounts(picker, 0, 0);
+		await expect(picker.getByText(noResults, { exact: true })).toBeVisible();
+		await search.clear();
+		await expectPickerCounts(picker, allSuites.length, 0);
+	});
+
+	await step(page, 'Add every filter and check its options', async () => {
+		await picker.getByText('Add Filters', { exact: true }).click();
+		for (const filter of suiteFilters) {
+			const checkbox = picker.getByRole('checkbox', { name: filter, exact: true });
+			await expect(checkbox).not.toBeChecked();
 			await checkbox.check();
 			await expect(checkbox).toBeChecked();
 		}
-		await modal.getByRole('button', { name: 'Select', exact: true }).click();
-		await expect(modal.getByText(`Selected for Test plan (${plan.suites.length})`, { exact: true })).toBeVisible();
-		await expect(modal.getByRole('button', { name: 'Add to Plan' })).toBeEnabled();
-		await modal.getByRole('button', { name: 'Add to Plan' }).click();
-		await expect(page.getByText('Add Test Suites to plan', { exact: true })).toBeHidden();
+		await closePickerPopover(picker);
+		await expect(picker.getByRole('checkbox', { name: suiteFilters[0], exact: true })).toBeHidden();
+
+		for (const filter of suiteFilters) {
+			await picker.getByText(filter, { exact: true }).first().click();
+			if (filter === 'Last Run Result') {
+				for (const result of lastRunResults) {
+					await expect(picker.getByRole('checkbox', { name: result, exact: true })).toBeVisible();
+				}
+			} else if (filter === 'Linked To') {
+				await expect(picker.getByRole('checkbox', { name: 'Test Management Tool', exact: true })).toBeVisible();
+			} else if (dateFilters.includes(filter)) {
+				await expect(picker.getByRole('button', { name: currentMonth(), exact: true })).toBeVisible();
+			} else {
+				// Test Case, Created By and Labels list their options under a search box.
+				await expect(visibleSearchBoxes(picker)).toHaveCount(1);
+				await expect(picker.getByRole('checkbox').filter({ visible: true }).nth(1)).toBeVisible();
+			}
+			await closePickerPopover(picker);
+			await expect(visibleSearchBoxes(picker)).toHaveCount(0);
+			await expect(picker.getByRole('button', { name: currentMonth(), exact: true })).toHaveCount(0);
+		}
 	});
 
-	await step(page, 'Check the suites were added', async () => {
-		await expect(main.getByText(`Test Suites (${plan.suites.length})`, { exact: true })).toBeVisible();
-		await expect(main.getByText('Test Machines (0)', { exact: true })).toBeVisible();
-		await expect(main.getByRole('textbox', { name: 'Search suite' })).toBeVisible();
-		for (const suite of plan.suites) {
+	await step(page, 'Filter the available suites by last run result and reset the filter', async () => {
+		// The suites have never run, so none of them was last paused.
+		await picker.getByText('Last Run Result', { exact: true }).first().click();
+		await picker.getByText('Paused', { exact: true }).click();
+		await expect(picker.getByRole('checkbox', { name: 'PAUSED', exact: true })).toBeChecked();
+		await closePickerPopover(picker);
+		await expect(picker.getByText('Last Run Result (1)', { exact: true })).toBeVisible();
+		await expectPickerCounts(picker, 0, 0);
+		await expect(picker.getByText(noResults, { exact: true })).toBeVisible();
+		await picker.getByText('Reset', { exact: true }).click();
+		await expect(picker.getByText('Last Run Result (1)', { exact: true })).toHaveCount(0);
+		await expectPickerCounts(picker, allSuites.length, 0);
+	});
+
+	await step(page, 'Move suites between the lists with Select All, Select and Remove', async () => {
+		await selectAll(picker, 'available').check();
+		await picker.getByRole('button', { name: 'Select', exact: true }).click();
+		await expectPickerCounts(picker, 0, allSuites.length);
+		await expect(picker.getByText('All the Test Suites are selected', { exact: true })).toBeVisible();
+		await expect(picker.getByRole('button', { name: 'Add to Plan' })).toBeEnabled();
+
+		await tickSuite(picker, readdedSuite);
+		await expect(picker.getByRole('button', { name: 'Remove', exact: true })).toBeEnabled();
+		await picker.getByRole('button', { name: 'Remove', exact: true }).click();
+		await expectPickerCounts(picker, 1, allSuites.length - 1);
+		await expect(pickerSuite(picker, readdedSuite)).not.toBeChecked();
+
+		await selectAll(picker, 'available').check();
+		await picker.getByRole('button', { name: 'Select', exact: true }).click();
+		await expectPickerCounts(picker, 0, allSuites.length);
+	});
+
+	await step(page, 'Add every suite to the plan', async () => {
+		await picker.getByRole('button', { name: 'Add to Plan' }).click();
+		await expect(page.getByText('Add Test Suites to plan', { exact: true })).toBeHidden();
+		await expect(main.getByText(`Test Suites (${allSuites.length})`, { exact: true })).toBeVisible();
+		for (const suite of allSuites) {
 			await expect(main.getByText(suite, { exact: true })).toBeVisible();
 		}
 	});
+
+	await step(page, 'Search the plan\'s suites', async () => {
+		const search = main.getByRole('textbox', { name: 'Search suite' });
+		await search.fill(plan.suites[0]);
+		await expect(main.getByText(plan.suites[0], { exact: true })).toBeVisible();
+		for (const suite of allSuites.filter((name) => name !== plan.suites[0])) {
+			await expect(main.getByText(suite, { exact: true })).toBeHidden();
+		}
+		await search.clear();
+		for (const suite of allSuites) {
+			await expect(main.getByText(suite, { exact: true })).toBeVisible();
+		}
+	});
+
+	await step(page, `Remove ${removedSuites.length === 1 ? 'a suite' : `${removedSuites.length} suites`} from the plan`, async () => {
+		for (const [index, suite] of removedSuites.entries()) {
+			await planSuiteMenu(page, suite).click();
+			await expect(page.getByText('Manage Test Case', { exact: true })).toBeVisible();
+			await page.getByText('Remove Suite', { exact: true }).click();
+			// No machine is linked yet, so the suite can only leave the whole plan.
+			const confirm = page.getByRole('dialog').filter({ hasText: 'Remove suite options' });
+			await expect(confirm.getByRole('radio', { name: 'Remove from this test machine' })).toBeDisabled();
+			await expect(confirm.getByRole('radio', { name: 'Remove from all test machines & test plan' })).toBeChecked();
+			await confirm.getByRole('button', { name: 'Remove', exact: true }).click();
+			await expect(confirm).toBeHidden();
+			await expect(main.getByText(suite, { exact: true })).toHaveCount(0);
+			await expect(main.getByText(`Test Suites (${allSuites.length - index - 1})`, { exact: true })).toBeVisible();
+		}
+	});
+
+	await step(page, `Add ${readdedSuite} back`, async () => {
+		const kept = allSuites.length - removedSuites.length;
+		await openSuitePicker(page, removedSuites.length, kept);
+		// Nothing has changed yet, so there is nothing to add.
+		await expect(picker.getByRole('button', { name: 'Add to Plan' })).toBeDisabled();
+		for (const suite of plan.suites.filter((name) => name !== readdedSuite)) {
+			await expect(pickerSuite(picker, suite)).toBeVisible();
+		}
+		await tickSuite(picker, readdedSuite);
+		await picker.getByRole('button', { name: 'Select', exact: true }).click();
+		await expectPickerCounts(picker, removedSuites.length - 1, kept + 1);
+		await picker.getByRole('button', { name: 'Add to Plan' }).click();
+		await expect(page.getByText('Add Test Suites to plan', { exact: true })).toBeHidden();
+	});
+
+	await step(page, 'Check the plan has its suites', async () => {
+		await expect(main.getByText(`Test Suites (${plan.suites.length})`, { exact: true })).toBeVisible();
+		await expect(main.getByText('Test Machines (0)', { exact: true })).toBeVisible();
+		for (const suite of plan.suites) {
+			await expect(main.getByText(suite, { exact: true })).toBeVisible();
+		}
+		for (const suite of extraSuites) {
+			await expect(main.getByText(suite, { exact: true })).toHaveCount(0);
+		}
+	});
+}
+
+// Local Devices runs on the user's own machine, so the form stops offering Testsigma's operating systems until
+// Testsigma Lab is chosen again. Switching back leaves the form unable to create its profile, so this is only
+// done on a form that is then cancelled.
+async function switchTestLabs(form: Locator) {
+	await form.getByRole('button', { name: /Local Devices$/ }).click();
+	await expect(fieldLabel(form, 'OS & Version')).toBeHidden();
+	await form.getByRole('button', { name: /Testsigma Lab$/ }).click();
+	await expect(fieldLabel(form, 'OS & Version')).toBeVisible();
+}
+
+// Checks the options behind the Add Machine form's fields, leaving every field as it was.
+async function checkMachineFormFields(page: Page, form: Locator, plan: PlanScenario) {
+	const labels = plan.machineForm.labels;
+	if (labels.includes('Browser')) {
+		// The form does not always start on the same browser, so check that looking at the menu keeps whichever
+		// one it shows.
+		const browser = dropdown(form, 'Browser');
+		await expect(browser).toHaveText(/(Chrome|Firefox|Edge) Latest/, { timeout: 30000 });
+		const chosen = (await browser.innerText()).trim();
+		await openDropdown(browser);
+		for (const name of ['Chrome', 'Firefox', 'Edge']) {
+			await expect(form.getByText(name, { exact: true })).toBeVisible();
+		}
+		// The menu opens upwards over the fields above it, so click the form's title to close it.
+		await closeDropdown(browser, form.getByText('Add test machine/device profile', { exact: true }));
+		await expect(browser).toHaveText(chosen);
+	}
+	if (labels.includes('App Source')) {
+		await expect(form.getByRole('radio', { name: 'Uploaded apps', exact: true })).toBeChecked();
+		await expect(form.getByRole('radio', { name: 'External link', exact: true })).not.toBeChecked();
+		// An uploaded app is chosen already, shown after the Uploads label.
+		await expect(fieldLabel(form, 'Uploads').locator("xpath=ancestor::div[normalize-space(.) != 'Uploads'][1]")).toHaveText(/^Uploads\s*\*?\s*\S/);
+	}
+	if (labels.includes('Select backup devices')) {
+		await expect(form.getByRole('button', { name: 'Add backup devices' })).toBeEnabled();
+	}
+	if (labels.includes('Pre-requisites')) {
+		await expect(form.getByRole('link', { name: 'View documentation for more pre-requisite settings' })).toHaveAttribute('href', /testsigma\.com\/docs\//);
+		await expect(form.getByRole('link', { name: 'Learn how to generate mobile app build with the required configuration' })).toHaveAttribute('href', /testsigma\.com\/docs\//);
+	}
+	await expect(form.getByText('Desired Capabilities', { exact: true })).toBeVisible();
+}
+
+// Picks the first user-defined profile's operating system and resolution and turns on its chosen options.
+async function applyMachineChoices(page: Page, form: Locator, choices: MachineChoices) {
+	if (choices.os) {
+		const os = dropdown(form, 'OS & Version');
+		await openDropdown(os);
+		await form.getByText(choices.os, { exact: true }).click();
+		await expect(os).toContainText(choices.os);
+	}
+	if (choices.resolution) {
+		const resolution = dropdown(form, 'Resolution');
+		await openDropdown(resolution);
+		await form.getByText(choices.resolution, { exact: true }).click();
+		await expect(resolution).toContainText(choices.resolution);
+	}
+	for (const option of choices.turnOn) {
+		await turnOn(form, page, option);
+	}
 }
 
 export async function linkMachineProfiles(run: PlanRun, plan: PlanScenario) {
@@ -370,6 +762,8 @@ export async function linkMachineProfiles(run: PlanRun, plan: PlanScenario) {
 			for (const machine of plan.predefinedCatalog) {
 				await expect(drawer.getByText(machine, { exact: true })).toBeVisible();
 			}
+			// None of them runs a suite of this plan yet.
+			await expect(drawer.getByText('No Suites', { exact: true })).toHaveCount(plan.predefinedCatalog.length);
 		} else {
 			await expect(predefined).toHaveCount(0);
 		}
@@ -388,6 +782,16 @@ export async function linkMachineProfiles(run: PlanRun, plan: PlanScenario) {
 	}
 
 	const addMachine = overlay(page, 'Add test machine/device profile', 'Create Profile');
+	await step(page, 'Switch test labs, then cancel the Add Machine form without creating a profile', async () => {
+		await drawer.getByRole('button', { name: 'Add Machine' }).click();
+		await addMachine.getByRole('textbox', { name: 'Name', exact: true }).fill(cancelledMachine);
+		await switchTestLabs(addMachine);
+		await addMachine.getByRole('button', { name: 'Cancel', exact: true }).click();
+		await expect(page.getByText('Add test machine/device profile', { exact: true })).toBeHidden({ timeout: 30000 });
+		await expect(drawer.getByText(cancelledMachine, { exact: true })).toHaveCount(0);
+		await expect(saveSelections).toHaveText(`Save selections(${selected})`);
+	});
+
 	for (const [index, machine] of plan.userDefinedMachines.entries()) {
 		await step(page, `Open${index === 0 ? ' and check' : ''} the Add Machine form for ${machine.name}`, async () => {
 			await drawer.getByRole('button', { name: 'Add Machine' }).click();
@@ -415,6 +819,7 @@ export async function linkMachineProfiles(run: PlanRun, plan: PlanScenario) {
 			if (plan.suites.length === 1) {
 				await expect(addMachine.getByRole('checkbox', { name: 'Run test suites in parallel', exact: true })).toHaveCount(0);
 			}
+			await checkMachineFormFields(page, addMachine, plan);
 		});
 
 		await step(page, `Create the user-defined ${machine.name} profile`, async () => {
@@ -428,6 +833,9 @@ export async function linkMachineProfiles(run: PlanRun, plan: PlanScenario) {
 					: (await deviceField(addMachine).innerText()).trim();
 				usedDevices.push(device);
 				test.info().annotations.push({ type: `${machine.name} device`, description: device });
+			}
+			if (index === 0) {
+				await applyMachineChoices(page, addMachine, plan.machineChoices);
 			}
 			await expect(addMachine.getByRole('button', { name: 'Create Profile' })).toBeEnabled();
 			await addMachine.getByRole('button', { name: 'Create Profile' }).click();
@@ -500,6 +908,16 @@ export async function fillPlanSettings(run: PlanRun, plan: PlanScenario) {
 		await expect(main.getByRole('link', { name: 'Open chat integrations' })).toHaveAttribute('href', '/ui/settings/plugs');
 	});
 
+	await step(page, 'An invalid email address is not added', async () => {
+		const email = main.getByRole('textbox', { name: 'Add Email' });
+		await email.fill(invalidEmail);
+		await email.press('Enter');
+		// Enter only turns a valid address into a chip; anything else stays in the box.
+		await expect(email).toHaveValue(invalidEmail);
+		await email.clear();
+		await expect(main.getByText(invalidEmail, { exact: true })).toHaveCount(0);
+	});
+
 	await step(page, `Add ${plan.notificationEmail} as a recipient`, async () => {
 		const email = main.getByRole('textbox', { name: 'Add Email' });
 		await email.fill(plan.notificationEmail);
@@ -508,6 +926,99 @@ export async function fillPlanSettings(run: PlanRun, plan: PlanScenario) {
 		await expect(email).toBeEmpty();
 		await expect(main.getByText(plan.notificationEmail, { exact: true })).toBeVisible();
 	});
+
+	await step(page, 'Add my email as a recipient', async () => {
+		await turnOn(main, page, 'Add my email');
+		await expect(main.getByText(accountEmail(), { exact: true })).toBeVisible();
+		await expect(main.getByText(plan.notificationEmail, { exact: true })).toBeVisible();
+	});
+
+	await step(page, 'Choose an environment', async () => {
+		const environment = dropdown(main, 'Environment');
+		await expect(environment).toHaveText('None');
+		await openDropdown(environment);
+		const options = (await main.getByRole('gridcell').filter({ visible: true }).allInnerTexts()).map((text) => text.trim());
+		expect(options[0]).toBe('None');
+		// Environments belong to the project, which may have none besides "None".
+		run.environment = options.find((option) => option && option !== 'None');
+		if (!run.environment) {
+			test.info().annotations.push({ type: 'environment', description: 'The project has no environments to choose.' });
+			await closeDropdown(environment, main.getByText('Additional Settings', { exact: true }));
+			return;
+		}
+		await main.getByRole('gridcell', { name: run.environment, exact: true }).click();
+		await expect(environment).toHaveText(run.environment);
+	});
+
+	await step(page, 'Capture screenshots only for failed steps', async () => {
+		const screenshots = dropdown(main, 'Screenshot capture');
+		await openDropdown(screenshots);
+		for (const option of screenshotOptions) {
+			await expect(main.getByText(option, { exact: true }).last()).toBeVisible();
+		}
+		await main.getByText('Only for failed Steps', { exact: true }).click();
+		await expect(screenshots).toHaveText('Only for failed Steps');
+	});
+
+	await step(page, 'Timeouts over 120 seconds are refused', async () => {
+		for (const name of ['Page Timeout', 'Step Timeout']) {
+			const timeout = main.getByRole('spinbutton', { name: `${name} (<=120 secs.)` });
+			await timeout.fill(timeouts.tooLong);
+			await timeout.blur();
+			await expect(main.getByText(`${name} should be less than or equal to 120`, { exact: true })).toBeVisible();
+		}
+	});
+
+	await step(page, `Set the page timeout to ${timeouts.page} and the step timeout to ${timeouts.step} seconds`, async () => {
+		for (const [name, value] of [['Page Timeout', timeouts.page], ['Step Timeout', timeouts.step]]) {
+			const timeout = main.getByRole('spinbutton', { name: `${name} (<=120 secs.)` });
+			await timeout.fill(value);
+			await timeout.blur();
+			await expect(timeout).toHaveValue(value);
+			await expect(main.getByText(`${name} should be less than or equal to 120`, { exact: true })).toHaveCount(0);
+		}
+		await turnOn(main, page, 'Apply to all steps');
+	});
+
+	await step(page, 'Turn on accessibility testing', async () => {
+		await expect(main.getByText('WCAG Version & Conformance Level', { exact: true })).toHaveCount(0);
+		await turnOn(main, page, 'Accessibility Testing');
+		await expect(main.getByText('WCAG Version & Conformance Level', { exact: true })).toBeVisible();
+		await expect(main.getByText('WCAG 2.1 AA', { exact: true })).toBeVisible();
+	});
+
+	await step(page, 'Change every recovery action', async () => {
+		// The actions stay folded away until their heading is clicked.
+		await expect(main.getByRole('row').filter({ hasText: recoveryActions[0].when })).toHaveCount(0);
+		await main.getByText('Recovery Actions', { exact: true }).click();
+		for (const { when, choices: [byDefault, other] } of recoveryActions) {
+			const row = main.getByRole('row').filter({ hasText: when });
+			await expect(row.getByRole('radio', { name: byDefault, exact: true })).toBeChecked();
+			await expect(row.getByRole('radio', { name: other, exact: true })).not.toBeChecked();
+			await choose(row, other);
+			await expect(row.getByRole('radio', { name: byDefault, exact: true })).not.toBeChecked();
+		}
+		const rerun = main.getByRole('row').filter({ hasText: 'Rerun on failure' });
+		await expect(rerun.getByRole('radio', { name: rerunChoices[0], exact: true })).toBeChecked();
+		for (const choice of rerunChoices.slice(1)) {
+			await expect(rerun.getByRole('radio', { name: choice, exact: true })).not.toBeChecked();
+		}
+		await choose(rerun, 'Only Failed Test Cases');
+	});
+
+	await step(page, 'Check the post plan hook offers no addon', async () => {
+		const addon = dropdown(main, 'Addon');
+		await expect(addon).toHaveText('None');
+		await openDropdown(addon);
+		await expect(main.getByText('None', { exact: true }).last()).toBeVisible();
+		await closeDropdown(addon, main.getByText('Post Plan Hook', { exact: true }));
+		await expect(addon).toHaveText('None');
+	});
+}
+
+// The signed-in account's address, which "Add my email" adds.
+function accountEmail() {
+	return process.env.TESTSIGMA_EMAIL!;
 }
 
 export async function createPlan(run: PlanRun, plan: PlanScenario) {
@@ -530,10 +1041,17 @@ export async function createPlan(run: PlanRun, plan: PlanScenario) {
 			description: plan.description,
 			applicationVersionId: versionId,
 			executionType: 'CROSS_BROWSER',
-			mailList: plan.notificationEmail,
+			...savedSettings,
 		});
+		expect(saved.mailList.split(',').map((email: string) => email.trim()).sort()).toEqual([plan.notificationEmail, accountEmail()].sort());
 		expect([...saved.notificationStatusList].sort()).toEqual(statusCodes);
+		// The label removed before saving is not among them.
 		expect([...saved.tags].sort()).toEqual([...plan.labels].sort());
+		if (run.environment) {
+			expect(saved.environmentId, `environment ${run.environment}`).toEqual(expect.any(Number));
+		} else {
+			expect(saved.environmentId).toBeNull();
+		}
 	});
 
 	await step(page, 'Check the plan details page', async () => {
@@ -558,11 +1076,70 @@ export async function createPlan(run: PlanRun, plan: PlanScenario) {
 			expect([...machine.suiteIds].sort(), `suites of ${machine.title}`).toEqual(expectedSuiteIds);
 			expect(machine.isPredefined, `${machine.title} is pre-defined`).toBe(plan.predefinedMachines.includes(machine.title));
 		}
+		const [firstUserDefined] = plan.userDefinedMachines;
+		expect(machines.find((machine) => machine.title === firstUserDefined.name), `settings of ${firstUserDefined.name}`)
+			.toMatchObject(plan.machineChoices.saved);
+		expect(machines.some((machine) => machine.title === cancelledMachine)).toBe(false);
 		// Profiles asked to use another device run on a device of their own.
 		if (plan.userDefinedMachines.some((machine) => machine.otherDevice)) {
 			const devices = machines.map((machine) => machine.platformDeviceId);
 			expect(new Set(devices).size, `devices ${devices.join(', ')}`).toBe(machines.length);
 		}
 		expect((await listPlans(page, versionId)).filter((item) => item.name === plan.name)).toHaveLength(1);
+	});
+}
+
+export async function verifyPlanInList(run: PlanRun, plan: PlanScenario) {
+	const { page, versionId } = run;
+	const main = wizard(page);
+	const search = main.getByRole('textbox', { name: 'Search' });
+	const plans = await listPlans(page, versionId);
+
+	await step(page, 'Open Test Plans', async () => {
+		await hoverNavigation(page, 300);
+		await page.getByRole('link', { name: 'Test Plans', exact: true }).click();
+		await expect(page).toHaveURL(new RegExp(`/td/${versionId}/plans$`), { timeout: 30000 });
+		await expect(main.getByText(`All (${plans.length})`, { exact: true })).toBeVisible({ timeout: 30000 });
+		for (const column of ['Name', 'Test Plan Type', 'Test Lab & Test Machines', 'Actions']) {
+			await expect(main.getByText(column, { exact: true })).toBeVisible();
+		}
+	});
+
+	await step(page, 'Search for the plan', async () => {
+		await search.fill(plan.name);
+		await expect(main.getByText('Filtered (1)', { exact: true })).toBeVisible({ timeout: 30000 });
+		const row = main.getByRole('grid').getByRole('row', { name: `${plan.name} - Cross Browser` }).last();
+		await expect(row.getByRole('link', { name: plan.name, exact: true })).toHaveAttribute('href', `/ui/td/plans/${run.planId}/details`);
+		await expect(row.getByRole('gridcell', { name: 'Cross Browser', exact: true })).toBeVisible();
+		for (const action of ['Schedule', 'Reports', 'Run']) {
+			await expect(row.getByText(action, { exact: true })).toBeVisible();
+		}
+	});
+
+	await step(page, 'Search for a plan that does not exist', async () => {
+		await search.fill('zz-no-such-plan');
+		await expect(main.getByText('Filtered (0)', { exact: true })).toBeVisible({ timeout: 30000 });
+		await expect(main.getByText(noResults, { exact: true })).toBeVisible();
+		await expect(main.getByRole('img', { name: 'Empty state illustration' })).toBeVisible();
+		await search.clear();
+		await expect(main.getByText(/^Filtered \(\d+\)$/)).toHaveCount(0);
+		await expect(main.getByRole('link', { name: plan.name, exact: true })).toBeVisible();
+	});
+
+	await step(page, 'Show and hide the filters', async () => {
+		await main.getByText('Show Filters', { exact: true }).click();
+		await expect(main.getByText('Hide Filters', { exact: true })).toBeVisible();
+		await expect(main.getByText('Add Filter', { exact: true })).toBeVisible();
+		await main.getByText('Hide Filters', { exact: true }).click();
+		await expect(main.getByText('Show Filters', { exact: true })).toBeVisible();
+		await expect(main.getByText('Add Filter', { exact: true })).toHaveCount(0);
+	});
+
+	await step(page, 'Check the sort options', async () => {
+		await main.getByText('Sort by', { exact: true }).click();
+		for (const option of sortOptions) {
+			await expect(main.getByText(option, { exact: true }).last()).toBeVisible();
+		}
+		await page.keyboard.press('Escape');
 	});
 }
