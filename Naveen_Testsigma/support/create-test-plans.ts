@@ -25,6 +25,8 @@ export type PlanScenario = {
 	machineForm: { labels: string[]; checked: string[]; unchecked: string[] };
 	notifyOn: string[];
 	notificationEmail: string;
+	// Settings fields only this application's plans have, e.g. a Salesforce connection.
+	extraSettings?: string[];
 };
 
 // What one run of the scenario learns along the way.
@@ -463,7 +465,7 @@ export async function fillPlanSettings(run: PlanRun, plan: PlanScenario) {
 		await expectWizardSteps(page);
 		await expect(main.getByRole('checkbox', { name: 'Send Notification', exact: true })).not.toBeChecked();
 		await expect(main.getByText('Additional Settings', { exact: true })).toBeVisible();
-		for (const label of ['Environment', 'Screenshot capture', 'Recovery Actions', 'Post Plan Hook', 'Addon']) {
+		for (const label of ['Environment', 'Screenshot capture', 'Recovery Actions', 'Post Plan Hook', 'Addon', ...(plan.extraSettings ?? [])]) {
 			await expect(fieldLabel(main, label)).toBeVisible();
 		}
 		await expect(main.getByText('For all steps', { exact: true })).toBeVisible();
