@@ -1,3 +1,12 @@
+/**
+ * Signing in with an unknown email and a wrong password.
+ *
+ * Scenario:
+ * - Sign in with a made-up email and password; the "Please enter a valid email address" error is shown and the
+ *   user stays on the Sign in page.
+ *
+ * Needs no account.
+ */
 import { expect, test } from '@playwright/test';
 
 test('[Negative] Verify the TestSigma login functionality with invalid details', async ({ page }) => {

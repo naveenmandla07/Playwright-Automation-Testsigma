@@ -1,3 +1,22 @@
+/**
+ * Every editable Project Settings field on a Modern project, then deleting the project.
+ *
+ * Scenario (one test, reported step by step):
+ * - Create or switch to "Testsigma_Settings_Delete_Modern".
+ * - Open Project Settings and check each tab: Project Details, Applications, Versions, test case and requirement
+ *   types, and Project Members.
+ * - Turn every project option on and off, saving and verifying each change.
+ * - Rename every test case and requirement type and check the new names persist.
+ * - Check the read-only member details and member search.
+ * - Update the project name and description, the application name and description, and the version title,
+ *   description and date range, verifying each after reopening.
+ * - Check the delete confirmation enables Delete only for exactly 'DELETE', then delete the project.
+ * - The account switches to "Testsigma Advanced Examples" and the deleted project is gone from the switcher.
+ *
+ * Known issue: the version date range can show one day later than the dates picked; this is a soft check that
+ * attaches the mismatch. Runs in the serial chromium-projects project because it changes the account's current
+ * project.
+ */
 import { expect, test, type Page } from '@playwright/test';
 
 const email = process.env.TESTSIGMA_EMAIL;

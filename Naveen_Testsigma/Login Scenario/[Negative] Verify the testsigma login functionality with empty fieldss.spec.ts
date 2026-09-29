@@ -1,3 +1,12 @@
+/**
+ * Signing in with the email and password left empty.
+ *
+ * Scenario:
+ * - Click Sign in with both fields empty; the browser flags both fields as required and the user stays on the
+ *   Sign in page.
+ *
+ * Needs no account.
+ */
 import { expect, test } from '@playwright/test';
 
 test('[Negative] Verify the TestSigma login functionality with empty fields', async ({ page }) => {

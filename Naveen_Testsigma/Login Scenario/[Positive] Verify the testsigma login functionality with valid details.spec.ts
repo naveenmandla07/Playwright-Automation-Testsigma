@@ -1,3 +1,12 @@
+/**
+ * Signing in to and out of Testsigma with a valid account.
+ *
+ * Scenarios:
+ * - Sign in with the TESTSIGMA_EMAIL / TESTSIGMA_PASSWORD account and land in the app.
+ * - Sign in, open the profile menu from the side navigation and log out back to the Sign in page.
+ *
+ * Skipped when the credentials are not set in .env.
+ */
 import { expect, test } from '@playwright/test';
 
 const email = process.env.TESTSIGMA_EMAIL;

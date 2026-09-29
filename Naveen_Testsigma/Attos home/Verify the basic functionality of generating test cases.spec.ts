@@ -1,3 +1,19 @@
+/**
+ * Generating test cases with Atto (Testsigma's AI) and saving one to the test case library.
+ *
+ * Scenario:
+ * - Sign in, note how many test cases the "AI Generated Feature" library folder holds, and open Atto.
+ * - Generate test cases from a prompt, reading the existing test case library, and wait for them to appear
+ *   (AI generation can take up to two minutes).
+ * - Check the All / Pending / Accepted / Rejected filters and open a generated test case: navigate between
+ *   cases and review its manual steps.
+ * - Generate automated steps for it and review the converted steps.
+ * - Check the run options: Testsigma Lab, Local Devices (terminal offline, Launch disabled) and Copilot
+ *   (unavailable).
+ * - Save the test case to the "AI Generated Feature" folder and confirm it appears in the library.
+ *
+ * Adds one test case to the library on every run.
+ */
 import { expect, test, type Page } from '@playwright/test';
 import { signInToTestsigma } from '../support/testsigma-auth';
 

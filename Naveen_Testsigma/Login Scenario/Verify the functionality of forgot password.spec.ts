@@ -1,3 +1,16 @@
+/**
+ * The forgot-password page reached from the Sign in page.
+ *
+ * Scenarios:
+ * - Open the page from the "Forgot password" link and check its email field, "Request reset link" button and
+ *   "Back to login" link.
+ * - Request a reset link for an email and see the "reset link has been sent" confirmation.
+ * - Request a reset link with the email empty; the field is flagged as required and the page does not change.
+ * - Go back to login with the email empty.
+ * - Go back to login after typing an email.
+ *
+ * Uses made-up example.com addresses, so needs no account.
+ */
 import { expect, test, type Page } from '@playwright/test';
 
 async function openForgotPassword(page: Page) {

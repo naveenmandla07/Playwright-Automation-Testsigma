@@ -1,3 +1,22 @@
+/**
+ * Creating, reading, updating and deleting an environment and its variables, including encrypted variables.
+ *
+ * Scenarios (run in order, sharing one signed-in page):
+ * - Create an environment and add 20 variables.
+ * - Read the environment and its variables after a reload, and scroll the variables table end to end.
+ * - Rename a variable and change two values.
+ * - Rename the environment and change its description (through the API, as the UI has no rename control).
+ * - Encryption:
+ *   - Encrypt a variable while adding it; the server stores only ciphertext.
+ *   - Turn encryption off again before saving.
+ *   - Encrypt an existing variable inside the environment; only this environment's value is encrypted and the
+ *     project default stays readable.
+ *   - Check an encrypted variable cannot be decrypted, since Testsigma offers no way to do so.
+ * - Delete the environment, then the variables created by this run.
+ *
+ * Variables belong to the whole project rather than one environment, so their names carry the run id, and
+ * anything a failed run leaves behind is removed afterwards.
+ */
 import { expect, test, type Locator, type Page, type Request } from '@playwright/test';
 
 const email = process.env.TESTSIGMA_EMAIL;

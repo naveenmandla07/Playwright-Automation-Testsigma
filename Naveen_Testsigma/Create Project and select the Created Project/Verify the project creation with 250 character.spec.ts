@@ -1,3 +1,12 @@
+/**
+ * The 250-character limit on the project name in the New Project form.
+ *
+ * Scenarios:
+ * - A 250-character name is accepted: no length error and Create is enabled.
+ * - A 251-character name shows the length error and Create is disabled.
+ *
+ * Neither project is created, so the account stays clean.
+ */
 import { expect, test, type Page } from '@playwright/test';
 
 const email = process.env.TESTSIGMA_EMAIL;

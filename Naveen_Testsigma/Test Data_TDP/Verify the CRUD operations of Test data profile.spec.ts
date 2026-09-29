@@ -1,3 +1,20 @@
+/**
+ * Creating, reading, updating and deleting test data profiles and their folders.
+ *
+ * Scenarios (run in order, sharing one signed-in page):
+ * - Create a folder with a subfolder, then rename both.
+ * - Create a test data profile in the subfolder, filling its grid with columns and data sets.
+ * - Read the profile back after a reload.
+ * - Update the profile name, a column name, a data set name and the data set values.
+ * - Create a second profile by importing an Excel file, checking its columns become parameters and its
+ *   ExpectedToFail values map to the ETF toggle.
+ * - Delete both profiles, the subfolder and the folder.
+ *
+ * A separate test deletes a folder that has profiles in its subfolders. It is marked as expected to fail
+ * because of a Testsigma bug that leaves those profiles behind; remove test.fail once the bug is fixed.
+ *
+ * Every name carries the run id, and anything a failed run leaves behind is removed afterwards.
+ */
 import path from 'node:path';
 import { expect, test, type Locator, type Page, type Response } from '@playwright/test';
 
