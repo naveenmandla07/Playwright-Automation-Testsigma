@@ -14,12 +14,13 @@
  */
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { expectTabElements, openSettings, openSignedInSettings, openTab, settingsTab, tabs } from '../support/admin-settings';
+import { missingCredentials, missingCredentialsMessage } from '../support/testsigma-auth';
 
 test.describe('Verify all the settings module and navigate them', () => {
 	// The tabs are visited in order on one signed-in page, but unlike a serial run, a tab that fails does not stop
 	// the tabs after it from being checked.
 	test.describe.configure({ mode: 'default', timeout: 120000 });
-	test.skip(!process.env.TESTSIGMA_EMAIL || !process.env.TESTSIGMA_PASSWORD, 'Set TESTSIGMA_EMAIL and TESTSIGMA_PASSWORD in .env to run this test.');
+	test.skip(missingCredentials, missingCredentialsMessage);
 
 	let page: Page;
 	let main: Locator;

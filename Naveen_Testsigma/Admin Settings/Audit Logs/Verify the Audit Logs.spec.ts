@@ -15,6 +15,7 @@
 import { expect, test, type Locator } from '@playwright/test';
 import { expectTabElements, openTab, reopenTab, useSettingsTab } from '../../support/admin-settings';
 import { projectName } from '../../support/create-test-suites';
+import { accountEmail } from '../../support/testsigma-auth';
 
 const eventTypes = ['Test Case', 'Element', 'Test Plan', 'Test Suite', 'Test Data', 'Environment', 'Variable', 'Authentication', 'Access Bridge'];
 const actions = ['Create', 'Update', 'Delete', 'Login', 'Logout'];
@@ -111,7 +112,7 @@ test.describe('Verify the Audit Logs', () => {
 		await openSection('User');
 		await expect.soft(panel.getByRole('textbox', { name: 'Search for a user' })).toBeVisible();
 		// The signed-in account is among the users to choose from.
-		await expect.soft(panel.getByRole('checkbox', { name: process.env.TESTSIGMA_EMAIL, exact: true })).toBeAttached();
+		await expect.soft(panel.getByRole('checkbox', { name: accountEmail, exact: true })).toBeAttached();
 		await openSection('Project');
 		// Searching the projects finds the one the other specs work in.
 		await panel.getByRole('textbox', { name: 'Search for a project' }).fill(projectName);

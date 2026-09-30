@@ -27,12 +27,13 @@ import {
 	versionName,
 	type SuiteApplication,
 } from '../support/create-test-suites';
+import { missingCredentials, missingCredentialsMessage } from '../support/testsigma-auth';
 
 const application: SuiteApplication = { name: 'iOS App', type: 'IOSNative' };
 
 test.describe('Verify the Create test suites in iOS application', () => {
 	test.describe.configure({ mode: 'serial', timeout: 180000 });
-	test.skip(!process.env.TESTSIGMA_EMAIL || !process.env.TESTSIGMA_PASSWORD, 'Set TESTSIGMA_EMAIL and TESTSIGMA_PASSWORD in .env to run this test.');
+	test.skip(missingCredentials, missingCredentialsMessage);
 
 	let page: Page;
 	let versionId: number;

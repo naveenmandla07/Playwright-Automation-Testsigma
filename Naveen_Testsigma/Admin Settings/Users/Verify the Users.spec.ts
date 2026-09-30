@@ -17,6 +17,7 @@
  */
 import { expect, test, type Locator } from '@playwright/test';
 import { expectMenuOptions, expectTabElements, openTab, reopenTab, searchFor, useSettingsTab } from '../../support/admin-settings';
+import { accountEmail } from '../../support/testsigma-auth';
 
 type User = { name: string; status: string; email: string; allocation: string; roles: string };
 
@@ -103,7 +104,7 @@ test.describe('Verify the Users', () => {
 			test.info().annotations.push({ type: 'user', description: `${user.name} ${user.roles ? `(${user.roles}) ` : ''}${user.status} ${user.email}` });
 		}
 		// The signed-in account runs the account, so it is both a Super Admin and the Account Admin.
-		const me = users.find((user) => user.email === process.env.TESTSIGMA_EMAIL);
+		const me = users.find((user) => user.email === accountEmail);
 		expect(me, 'the signed-in account').toBeDefined();
 		expect(me!.roles).toBe('Super Admin, Account Admin');
 		expect(me!.status).toBe('Active');
@@ -163,7 +164,7 @@ test.describe('Verify the Users', () => {
 
 	test('Check what a user\'s menu offers', async () => {
 		const users = await listedUsers(run.main);
-		const other = users.find((user) => user.email !== process.env.TESTSIGMA_EMAIL && user.status === 'Active');
+		const other = users.find((user) => user.email !== accountEmail && user.status === 'Active');
 		test.skip(!other, 'There is no other active user.');
 		const row = userRows(run.main).filter({ hasText: other!.email });
 		await row.getByTestId('more-vertical').click();
@@ -174,7 +175,7 @@ test.describe('Verify the Users', () => {
 		await reopenTab(run.page, run.tab);
 
 		// The signed-in account can only view its own details.
-		const mine = userRows(run.main).filter({ hasText: process.env.TESTSIGMA_EMAIL! });
+		const mine = userRows(run.main).filter({ hasText: accountEmail });
 		await mine.getByTestId('more-vertical').click();
 		await expect(mine.getByText('View details', { exact: true })).toBeVisible();
 		for (const choice of ['Make Org Owner', 'Edit user role', 'Deactivate User']) {

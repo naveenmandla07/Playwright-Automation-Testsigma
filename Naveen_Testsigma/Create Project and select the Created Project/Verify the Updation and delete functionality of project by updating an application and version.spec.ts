@@ -17,44 +17,18 @@
  * attaches the mismatch. Runs in the serial chromium-projects project because it changes the account's current
  * project.
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import { accountEmail, missingCredentials, missingCredentialsMessage, signInToTestsigma } from '../support/testsigma-auth';
 
-const email = process.env.TESTSIGMA_EMAIL;
-const password = process.env.TESTSIGMA_PASSWORD;
 const projectName = 'Testsigma_Settings_Delete_Modern';
-
-async function dismissNewsNotification(page: Page) {
-	const notificationPrompt = page.getByText("We'd like to show you notifications for the latest news and updates.", { exact: true });
-	const noThanksButton = page.getByRole('button', { name: /no,? thanks/i });
-
-	await page.waitForTimeout(5000);
-	if (await notificationPrompt.isVisible()) {
-		await expect(noThanksButton).toBeVisible();
-		await noThanksButton.click();
-		await expect(notificationPrompt).toBeHidden();
-	}
-}
-
-async function signIn(page: Page) {
-	await page.goto('./');
-	await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
-
-	await page.getByPlaceholder('name@company.com').fill(email!);
-	await page.getByPlaceholder('Enter Password').fill(password!);
-	await page.getByRole('button', { name: 'Sign in' }).click();
-
-	await page.waitForURL(/\/ui\/v2\//, { timeout: 30000 });
-	await expect(page.getByRole('button', { name: 'Share Feedback' })).toBeVisible({ timeout: 30000 });
-	await dismissNewsNotification(page);
-}
 
 test('[Modern] Verify all editable project settings, persistence and deletion', async ({ page }) => {
 	test.setTimeout(360000);
 	page.setDefaultTimeout(15000);
-	test.skip(!email || !password, 'Set TESTSIGMA_EMAIL and TESTSIGMA_PASSWORD in .env to run this test.');
+	test.skip(missingCredentials, missingCredentialsMessage);
 
 	try {
-		await signIn(page);
+		await signInToTestsigma(page);
 
 		await page.mouse.move(20, 100);
 		const projectApplicationTab = page.locator('[role="button"]').filter({ has: page.locator('[data-testid="web"]') });
@@ -148,7 +122,6 @@ test('[Modern] Verify all editable project settings, persistence and deletion', 
 
 		await page.reload();
 		await page.mouse.move(20, 100);
-		await dismissNewsNotification(page);
 		await expect(projectApplicationTab).toBeVisible({ timeout: 30000 });
 		await projectApplicationTab.click();
 		await expect(projectDropdown).toContainText(projectName);
@@ -228,7 +201,7 @@ test('[Modern] Verify all editable project settings, persistence and deletion', 
 						for (const label of ['Name', 'Email']) {
 							await expect(dialog.getByText(label, { exact: true })).toBeVisible();
 						}
-						await expect(dialog.getByRole('row').filter({ hasText: email! })).toBeVisible();
+						await expect(dialog.getByRole('row').filter({ hasText: accountEmail })).toBeVisible();
 					} else {
 						await expect(dialog.getByRole('textbox', { name: 'Search', exact: true })).toBeEditable();
 						const types = tab === 'Test Case Types'
@@ -349,14 +322,14 @@ test('[Modern] Verify all editable project settings, persistence and deletion', 
 		await test.step('Verify read-only project member details and search', async () => {
 			const dialog = page.getByRole('dialog');
 			await dialog.getByText('Project Members', { exact: true }).first().click();
-			const member = dialog.getByRole('row').filter({ hasText: email! });
+			const member = dialog.getByRole('row').filter({ hasText: accountEmail });
 			await expect(member).toBeVisible();
 			await expect(member.getByText('Test Manager', { exact: true })).toBeVisible();
 			await expect(member.locator('input, textarea, select, [contenteditable="true"], [data-testid="edit"]')).toHaveCount(0);
 			const search = dialog.getByRole('textbox', { name: 'Search', exact: true });
 			if (!await search.isVisible()) await dialog.getByTestId('search').click();
 			await expect(search).toBeVisible();
-			await search.fill(email!);
+			await search.fill(accountEmail);
 			await expect(member).toBeVisible();
 			await search.fill('NoSuchMember_Playwright');
 			await expect(member).toBeHidden();

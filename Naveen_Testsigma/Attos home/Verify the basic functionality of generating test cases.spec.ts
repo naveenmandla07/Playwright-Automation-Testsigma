@@ -15,10 +15,8 @@
  * Adds one test case to the library on every run.
  */
 import { expect, test, type Page } from '@playwright/test';
-import { signInToTestsigma } from '../support/testsigma-auth';
+import { missingCredentials, missingCredentialsMessage, signInToTestsigma } from '../support/testsigma-auth';
 
-const email = process.env.TESTSIGMA_EMAIL;
-const password = process.env.TESTSIGMA_PASSWORD;
 const generationPrompt = 'Generate test cases for a user login page with email and password fields. Cover successful login with valid credentials, invalid email format, incorrect password, empty fields, password visibility toggle, and forgot-password navigation. For each test case, provide a clear title, preconditions, steps, and expected results, including relevant validation and error messages.';
 
 async function installNewsNotificationHandler(page: Page) {
@@ -34,7 +32,7 @@ async function installNewsNotificationHandler(page: Page) {
 
 test('[Atto] Generate, automate, inspect labs, and save a test case', async ({ page }) => {
 	test.setTimeout(300000);
-	test.skip(!email || !password, 'Set TESTSIGMA_EMAIL and TESTSIGMA_PASSWORD in .env to run this test.');
+	test.skip(missingCredentials, missingCredentialsMessage);
 
 	await installNewsNotificationHandler(page);
 	await signInToTestsigma(page);

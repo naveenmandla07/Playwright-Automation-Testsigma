@@ -3,9 +3,7 @@
  * "[9.0.8] Accessibility" project has its own spec, which declares the tests and runs these steps for it.
  */
 import { expect, test, type Browser, type Locator, type Page, type Request } from '@playwright/test';
-
-const email = process.env.TESTSIGMA_EMAIL;
-const password = process.env.TESTSIGMA_PASSWORD;
+import { signInToTestsigma } from './testsigma-auth';
 
 const projectName = '[9.0.8] Accessibility';
 const versionName = '1';
@@ -17,25 +15,6 @@ type TestCase = { id: number; name: string };
 
 // An application of the project, as named in the project switcher, with its Testsigma application type.
 export type SuiteApplication = { name: string; type: string };
-
-// The news-notification prompt can appear at any point after sign-in and blocks clicks until dismissed.
-async function dismissNewsNotificationWhenShown(page: Page) {
-	await page.addLocatorHandler(page.locator('#beamerPushModal'), async (modal) => {
-		await modal.getByRole('button', { name: /no,? thanks/i }).or(modal.getByText(/no,? thanks/i)).first().click();
-	});
-}
-
-async function signIn(page: Page) {
-	await page.goto('./');
-	await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
-
-	await page.getByPlaceholder('name@company.com').fill(email!);
-	await page.getByPlaceholder('Enter Password').fill(password!);
-	await page.getByRole('button', { name: 'Sign in' }).click();
-
-	await page.waitForURL(/\/ui\/v2\//, { timeout: 30000 });
-	await expect(page.getByRole('button', { name: 'Share Feedback' })).toBeVisible({ timeout: 30000 });
-}
 
 // The side navigation only shows labels while hovered. Moving onto the spot the pointer is already on does not
 // count as hovering, so move away first.
@@ -186,8 +165,7 @@ export async function openSignedInPage(browser: Browser, { name, type }: SuiteAp
 	const page = await browser.newPage();
 	page.setDefaultTimeout(15000);
 	page.setDefaultNavigationTimeout(30000);
-	await dismissNewsNotificationWhenShown(page);
-	await signIn(page);
+	await signInToTestsigma(page);
 	return { page, versionId: await findVersionId(page, name, type) };
 }
 

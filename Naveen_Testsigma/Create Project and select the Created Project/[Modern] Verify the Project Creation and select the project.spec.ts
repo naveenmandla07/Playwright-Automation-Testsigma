@@ -11,42 +11,16 @@
  * The project is kept between runs. Runs in the serial chromium-projects project because it changes the
  * account's current project.
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import { missingCredentials, missingCredentialsMessage, signInToTestsigma } from '../support/testsigma-auth';
 
-const email = process.env.TESTSIGMA_EMAIL;
-const password = process.env.TESTSIGMA_PASSWORD;
 const projectName = 'Testsigma_New_Project_1_Modern';
 
-async function dismissNewsNotification(page: Page) {
-	const notificationPrompt = page.getByText("We'd like to show you notifications for the latest news and updates.", { exact: true });
-	const noThanksButton = page.getByRole('button', { name: /no,? thanks/i });
-
-	await page.waitForTimeout(5000);
-	if (await notificationPrompt.isVisible()) {
-		await expect(noThanksButton).toBeVisible();
-		await noThanksButton.click();
-		await expect(notificationPrompt).toBeHidden();
-	}
-}
-
-async function signIn(page: Page) {
-	await page.goto('./');
-	await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
-
-	await page.getByPlaceholder('name@company.com').fill(email!);
-	await page.getByPlaceholder('Enter Password').fill(password!);
-	await page.getByRole('button', { name: 'Sign in' }).click();
-
-	await page.waitForURL(/\/ui\/v2\//, { timeout: 30000 });
-	await expect(page.getByRole('button', { name: 'Share Feedback' })).toBeVisible({ timeout: 30000 });
-	await dismissNewsNotification(page);
-}
-
 test('[Modern] Verify Testsigma_New_Project_1_Modern creation and selection', async ({ page }) => {
-	test.skip(!email || !password, 'Set TESTSIGMA_EMAIL and TESTSIGMA_PASSWORD in .env to run this test.');
+	test.skip(missingCredentials, missingCredentialsMessage);
 
 	try {
-		await signIn(page);
+		await signInToTestsigma(page);
 
 		await page.mouse.move(20, 100);
 		const projectApplicationTab = page.locator('[role="button"]').filter({ has: page.locator('[data-testid="web"]') });
@@ -140,7 +114,6 @@ test('[Modern] Verify Testsigma_New_Project_1_Modern creation and selection', as
 
 		await page.reload();
 		await page.mouse.move(20, 100);
-		await dismissNewsNotification(page);
 		await expect(projectApplicationTab).toBeVisible({ timeout: 30000 });
 		await projectApplicationTab.click();
 		await expect(projectDropdown).toContainText(projectName);
@@ -157,7 +130,6 @@ test('[Modern] Verify Testsigma_New_Project_1_Modern creation and selection', as
 
 		await page.reload();
 		await page.mouse.move(20, 100);
-		await dismissNewsNotification(page);
 		await expect(projectApplicationTab).toBeVisible({ timeout: 30000 });
 		await projectApplicationTab.click();
 		await projectDropdown.click();

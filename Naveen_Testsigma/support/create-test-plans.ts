@@ -5,6 +5,7 @@
  */
 import { expect, test, type Locator, type Page, type Request } from '@playwright/test';
 import { hoverNavigation, type SuiteApplication } from './create-test-suites';
+import { accountEmail } from './testsigma-auth';
 
 // A user-defined machine profile; otherDevice puts it on a device no earlier profile of the plan uses.
 export type UserDefinedMachine = { name: string; otherDevice?: boolean };
@@ -933,7 +934,7 @@ export async function fillPlanSettings(run: PlanRun, plan: PlanScenario) {
 
 	await step(page, 'Add my email as a recipient', async () => {
 		await turnOn(main, page, 'Add my email');
-		await expect(main.getByText(accountEmail(), { exact: true })).toBeVisible();
+		await expect(main.getByText(accountEmail, { exact: true })).toBeVisible();
 		await expect(main.getByText(plan.notificationEmail, { exact: true })).toBeVisible();
 	});
 
@@ -1023,11 +1024,6 @@ export async function fillPlanSettings(run: PlanRun, plan: PlanScenario) {
 	});
 }
 
-// The signed-in account's address, which "Add my email" adds.
-function accountEmail() {
-	return process.env.TESTSIGMA_EMAIL!;
-}
-
 export async function createPlan(run: PlanRun, plan: PlanScenario) {
 	const { page, versionId } = run;
 	const main = wizard(page);
@@ -1050,7 +1046,7 @@ export async function createPlan(run: PlanRun, plan: PlanScenario) {
 			executionType: 'CROSS_BROWSER',
 			...savedSettings,
 		});
-		expect(saved.mailList.split(',').map((email: string) => email.trim()).sort()).toEqual([plan.notificationEmail, accountEmail()].sort());
+		expect(saved.mailList.split(',').map((email: string) => email.trim()).sort()).toEqual([plan.notificationEmail, accountEmail].sort());
 		expect([...saved.notificationStatusList].sort()).toEqual(statusCodes);
 		// The label removed before saving is not among them.
 		expect([...saved.tags].sort()).toEqual([...plan.labels].sort());

@@ -36,6 +36,7 @@ import {
 	type PlanScenario,
 } from '../../support/create-test-plans';
 import { openSignedInPage, projectName, suiteNames, switchToApplication, versionName } from '../../support/create-test-suites';
+import { missingCredentials, missingCredentialsMessage } from '../../support/testsigma-auth';
 
 const plan: PlanScenario = {
 	application: { name: 'Android', type: 'AndroidNative' },
@@ -62,7 +63,7 @@ const plan: PlanScenario = {
 
 test.describe('Verify the Create test plan in Android application', () => {
 	test.describe.configure({ mode: 'serial', timeout: 240000 });
-	test.skip(!process.env.TESTSIGMA_EMAIL || !process.env.TESTSIGMA_PASSWORD, 'Set TESTSIGMA_EMAIL and TESTSIGMA_PASSWORD in .env to run this test.');
+	test.skip(missingCredentials, missingCredentialsMessage);
 
 	let run: PlanRun;
 

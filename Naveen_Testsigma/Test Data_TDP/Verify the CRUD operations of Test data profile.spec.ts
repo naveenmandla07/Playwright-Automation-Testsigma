@@ -17,9 +17,8 @@
  */
 import path from 'node:path';
 import { expect, test, type Locator, type Page, type Response } from '@playwright/test';
+import { missingCredentials, missingCredentialsMessage, signInToTestsigma } from '../support/testsigma-auth';
 
-const email = process.env.TESTSIGMA_EMAIL;
-const password = process.env.TESTSIGMA_PASSWORD;
 
 const runId = Date.now();
 const folderName = `PW_TDP_Folder_${runId}`;
@@ -49,25 +48,6 @@ const importedDataSets = [
 	['import_set_one', 'First imported set', 'import_user_one', 'import_pass_one'],
 	['import_set_two', 'Second imported set', 'import_user_two', 'import_pass_two'],
 ];
-
-// The news-notification prompt can appear at any point after sign-in and blocks clicks until dismissed.
-async function dismissNewsNotificationWhenShown(page: Page) {
-	await page.addLocatorHandler(page.locator('#beamerPushModal'), async (modal) => {
-		await modal.getByRole('button', { name: /no,? thanks/i }).or(modal.getByText(/no,? thanks/i)).first().click();
-	});
-}
-
-async function signIn(page: Page) {
-	await page.goto('./');
-	await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
-
-	await page.getByPlaceholder('name@company.com').fill(email!);
-	await page.getByPlaceholder('Enter Password').fill(password!);
-	await page.getByRole('button', { name: 'Sign in' }).click();
-
-	await page.waitForURL(/\/ui\/v2\//, { timeout: 30000 });
-	await expect(page.getByRole('button', { name: 'Share Feedback' })).toBeVisible({ timeout: 30000 });
-}
 
 async function openTestDataProfiles(page: Page) {
 	// The side navigation only shows labels while hovered.
@@ -285,7 +265,7 @@ async function deleteProfile(page: Page, name: string, id: number) {
 
 test.describe('Verify the CRUD operations of Test Data Profile', () => {
 	test.describe.configure({ mode: 'serial', timeout: 180000 });
-	test.skip(!email || !password, 'Set TESTSIGMA_EMAIL and TESTSIGMA_PASSWORD in .env to run this test.');
+	test.skip(missingCredentials, missingCredentialsMessage);
 
 	let page: Page;
 	let folderId: number | undefined;
@@ -297,8 +277,7 @@ test.describe('Verify the CRUD operations of Test Data Profile', () => {
 		page = await browser.newPage();
 		page.setDefaultTimeout(15000);
 		page.setDefaultNavigationTimeout(30000);
-		await dismissNewsNotificationWhenShown(page);
-		await signIn(page);
+		await signInToTestsigma(page);
 		await openTestDataProfiles(page);
 	});
 
@@ -531,7 +510,7 @@ test.describe('Verify the CRUD operations of Test Data Profile', () => {
 });
 
 test.describe('Verify folder deletion removes nested test data profiles', () => {
-	test.skip(!email || !password, 'Set TESTSIGMA_EMAIL and TESTSIGMA_PASSWORD in .env to run this test.');
+	test.skip(missingCredentials, missingCredentialsMessage);
 
 	test('Deleting a folder deletes the test data profiles in its subfolders', async ({ page }) => {
 		// Remove this once Testsigma fixes the bug; the test then fails as "expected to fail but passed".
@@ -539,8 +518,7 @@ test.describe('Verify folder deletion removes nested test data profiles', () => 
 		test.setTimeout(120000);
 		page.setDefaultTimeout(15000);
 		page.setDefaultNavigationTimeout(30000);
-		await dismissNewsNotificationWhenShown(page);
-		await signIn(page);
+		await signInToTestsigma(page);
 		await openTestDataProfiles(page);
 
 		const versionId = Number(page.url().match(/\/td\/(\d+)\//)![1]);

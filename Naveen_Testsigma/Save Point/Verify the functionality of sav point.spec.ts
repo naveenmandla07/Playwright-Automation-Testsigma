@@ -22,6 +22,7 @@
  */
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { openSignedInPage, projectName, switchToApplication, versionName } from '../support/create-test-suites';
+import { missingCredentials, missingCredentialsMessage } from '../support/testsigma-auth';
 
 type SavePoint = { id: number; description: string; type: 'MANUAL' | 'IMPORT'; createdAtEpoch: number; applicationVersionId: number };
 
@@ -84,7 +85,7 @@ async function listedNames(main: Locator) {
 
 test.describe('Verify the functionality of save points', () => {
 	test.describe.configure({ mode: 'serial', timeout: 300000 });
-	test.skip(!process.env.TESTSIGMA_EMAIL || !process.env.TESTSIGMA_PASSWORD, 'Set TESTSIGMA_EMAIL and TESTSIGMA_PASSWORD in .env to run this test.');
+	test.skip(missingCredentials, missingCredentialsMessage);
 
 	let page: Page;
 	let main: Locator;

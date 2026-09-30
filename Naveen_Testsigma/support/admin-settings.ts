@@ -3,7 +3,7 @@
  * its tabs, and each tab's elements, checked by the all-tabs spec and by each tab's own spec.
  */
 import { expect, test, type Browser, type Locator, type Page, type Request } from '@playwright/test';
-import { signInToTestsigma } from './testsigma-auth';
+import { missingCredentials, missingCredentialsMessage, signInToTestsigma } from './testsigma-auth';
 
 // Each tab is given this long after it opens so everything it loads is shown before it is checked.
 export const settleTime = 6000;
@@ -320,12 +320,6 @@ export async function expectTabElements(main: Locator, tab: SettingsTab) {
 	await tab.extra?.(main);
 }
 
-// The news widget's prompt can cover the page at any time and cannot always be dismissed, so the widget is kept
-// from loading at all.
-async function blockNewsWidget(page: Page) {
-	await page.route(/getbeamer\.com/, (route) => route.abort());
-}
-
 // Settings opens on its first tab, with the tab list beside it.
 export async function openSettings(page: Page) {
 	await page.getByRole('navigation').getByRole('link', { name: 'Settings', exact: true }).click();
@@ -337,7 +331,6 @@ export async function openSettings(page: Page) {
 export async function openSignedInSettings(browser: Browser) {
 	const page = await browser.newPage();
 	page.setDefaultTimeout(15000);
-	await blockNewsWidget(page);
 	await signInToTestsigma(page);
 	await openSettings(page);
 	return page;
@@ -386,7 +379,7 @@ export function useSettingsTab(name: string): SettingsTabRun {
 	};
 
 	test.describe.configure({ mode: 'default', timeout: 120000 });
-	test.skip(!process.env.TESTSIGMA_EMAIL || !process.env.TESTSIGMA_PASSWORD, 'Set TESTSIGMA_EMAIL and TESTSIGMA_PASSWORD in .env to run this test.');
+	test.skip(missingCredentials, missingCredentialsMessage);
 
 	test.beforeAll(async ({ browser }) => {
 		run.page = await openSignedInSettings(browser);
