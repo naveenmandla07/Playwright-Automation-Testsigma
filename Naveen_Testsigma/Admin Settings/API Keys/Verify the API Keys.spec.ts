@@ -14,7 +14,7 @@
  * checked for what every key shows rather than for particular names.
  */
 import { expect, test, type Locator } from '@playwright/test';
-import { expectTabElements, openTab, reopenTab, useSettingsTab } from '../support/admin-settings';
+import { expectTabElements, openTab, reopenTab, useSettingsTab } from '../../support/admin-settings';
 
 const expirationChoices = ['7 days', '30 days', '90 days', 'Custom', 'Never expires'];
 

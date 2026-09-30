@@ -11,7 +11,7 @@
  * Nothing is saved: "Create" and "Validate API key" are checked but never clicked, and every form is cancelled.
  */
 import { expect, test } from '@playwright/test';
-import { expectTabElements, genAiFeatures, openTab, useSettingsTab } from '../support/admin-settings';
+import { expectTabElements, genAiFeatures, openTab, useSettingsTab } from '../../support/admin-settings';
 
 type Provider = { name: string; fields: string[]; texts?: (string | RegExp)[]; buttons?: string[] };
 

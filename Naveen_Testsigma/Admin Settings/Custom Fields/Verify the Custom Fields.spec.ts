@@ -12,7 +12,7 @@
  * never clicked. The fields belong to the account, so they are read from the page.
  */
 import { expect, test, type Locator } from '@playwright/test';
-import { expectMenuOptions, expectTabElements, openTab, useSettingsTab } from '../support/admin-settings';
+import { expectMenuOptions, expectTabElements, openTab, useSettingsTab } from '../../support/admin-settings';
 
 const fieldTypes = ['Text field', 'Dropdown select', 'Checkbox', 'Radio button', 'Date picker', 'Text area', 'URL', 'Number field'];
 // Field types that choose from a list of options, which the form asks for.

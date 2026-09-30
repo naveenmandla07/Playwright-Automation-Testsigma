@@ -14,7 +14,7 @@
  * clicked, and the delete icon is never used. The profiles belong to the account, so they are read from the page.
  */
 import { expect, test, type Locator } from '@playwright/test';
-import { expectTabElements, openTab, reopenTab, searchFor, useSettingsTab } from '../support/admin-settings';
+import { expectTabElements, openTab, reopenTab, searchFor, useSettingsTab } from '../../support/admin-settings';
 
 // The list is searched on the server, which can take a while to answer.
 const searchTime = 15000;

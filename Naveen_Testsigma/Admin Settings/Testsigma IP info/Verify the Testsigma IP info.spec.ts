@@ -10,7 +10,7 @@
  * Only reads and copies; nothing is changed.
  */
 import { expect, test, type Locator } from '@playwright/test';
-import { expectTabElements, openTab, useSettingsTab } from '../support/admin-settings';
+import { expectTabElements, openTab, useSettingsTab } from '../../support/admin-settings';
 
 const ipAddress = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 

@@ -11,7 +11,7 @@
  * is written. Phone numbers are provisioned by Testsigma for the account, so either state can be shown.
  */
 import { expect, test } from '@playwright/test';
-import { expectTabElements, openTab, useSettingsTab } from '../support/admin-settings';
+import { expectTabElements, openTab, useSettingsTab } from '../../support/admin-settings';
 
 test.describe('Verify the Phone Numbers', () => {
 	const run = useSettingsTab('Phone Numbers (TFA)');

@@ -13,7 +13,7 @@
  * page.
  */
 import { expect, test } from '@playwright/test';
-import { expectTabElements, openTab, useSettingsTab } from '../support/admin-settings';
+import { expectTabElements, openTab, useSettingsTab } from '../../support/admin-settings';
 
 const plans = [
 	{

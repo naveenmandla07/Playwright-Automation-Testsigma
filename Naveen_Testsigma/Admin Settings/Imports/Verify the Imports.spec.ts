@@ -13,7 +13,7 @@
  * read from the page and checked for what every import shows.
  */
 import { expect, test, type Locator } from '@playwright/test';
-import { expectTabElements, openTab, reopenTab, useSettingsTab } from '../support/admin-settings';
+import { expectTabElements, openTab, reopenTab, useSettingsTab } from '../../support/admin-settings';
 
 const artefacts = ['Variables', 'Step Groups', 'Test Cases', 'Environments', 'Elements', 'Test Suites', 'Test Plans', 'Test Data Profile', 'Uploads'];
 const postmanColumns = ['Project', 'Application', 'Version', 'Initiated by', 'Action', 'Status'];

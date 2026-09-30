@@ -16,7 +16,7 @@
  * checked but never clicked. The users belong to the account, so they are read from the page.
  */
 import { expect, test, type Locator } from '@playwright/test';
-import { expectMenuOptions, expectTabElements, openTab, reopenTab, searchFor, useSettingsTab } from '../support/admin-settings';
+import { expectMenuOptions, expectTabElements, openTab, reopenTab, searchFor, useSettingsTab } from '../../support/admin-settings';
 
 type User = { name: string; status: string; email: string; allocation: string; roles: string };
 

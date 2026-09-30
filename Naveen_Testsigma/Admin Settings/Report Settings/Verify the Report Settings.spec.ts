@@ -8,7 +8,7 @@
  * Customising reports applies to the whole account as soon as it is switched, so the switch is only looked at.
  */
 import { expect, test } from '@playwright/test';
-import { expectTabElements, openTab, useSettingsTab } from '../support/admin-settings';
+import { expectTabElements, openTab, useSettingsTab } from '../../support/admin-settings';
 
 test.describe('Verify the Report Settings', () => {
 	const run = useSettingsTab('Report Settings');

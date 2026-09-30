@@ -9,7 +9,7 @@
  * Whether support may sign in is the account's own choice, so the button is checked but never clicked.
  */
 import { expect, test } from '@playwright/test';
-import { expectTabElements, openTab, useSettingsTab } from '../support/admin-settings';
+import { expectTabElements, openTab, useSettingsTab } from '../../support/admin-settings';
 
 test.describe('Verify the Manage Access', () => {
 	const run = useSettingsTab('Manage Access');

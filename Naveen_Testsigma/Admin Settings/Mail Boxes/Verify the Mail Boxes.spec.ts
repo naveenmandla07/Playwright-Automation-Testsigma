@@ -12,7 +12,7 @@
  * belong to the account, so they are read from the page.
  */
 import { expect, test, type Locator } from '@playwright/test';
-import { expectTabElements, openTab, useSettingsTab } from '../support/admin-settings';
+import { expectTabElements, openTab, useSettingsTab } from '../../support/admin-settings';
 
 // Each mailbox is a row inside the grid's own wrapping row.
 function mailboxRows(main: Locator) {

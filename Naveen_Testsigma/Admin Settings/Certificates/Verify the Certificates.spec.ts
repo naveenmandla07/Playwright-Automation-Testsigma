@@ -10,7 +10,7 @@
  * Nothing is added: no file is chosen, "Add certificate" in the form is never clicked, and the form is cancelled.
  */
 import { expect, test } from '@playwright/test';
-import { expectTabElements, openTab, useSettingsTab } from '../support/admin-settings';
+import { expectTabElements, openTab, useSettingsTab } from '../../support/admin-settings';
 
 test.describe('Verify the Certificates', () => {
 	const run = useSettingsTab('Certificates');

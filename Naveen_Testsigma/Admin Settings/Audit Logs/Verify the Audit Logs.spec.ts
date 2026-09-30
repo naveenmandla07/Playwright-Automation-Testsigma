@@ -13,8 +13,8 @@
  * to the account, so entries are checked for what every entry shows.
  */
 import { expect, test, type Locator } from '@playwright/test';
-import { expectTabElements, openTab, reopenTab, useSettingsTab } from '../support/admin-settings';
-import { projectName } from '../support/create-test-suites';
+import { expectTabElements, openTab, reopenTab, useSettingsTab } from '../../support/admin-settings';
+import { projectName } from '../../support/create-test-suites';
 
 const eventTypes = ['Test Case', 'Element', 'Test Plan', 'Test Suite', 'Test Data', 'Environment', 'Variable', 'Authentication', 'Access Bridge'];
 const actions = ['Create', 'Update', 'Delete', 'Login', 'Logout'];

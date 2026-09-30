@@ -13,7 +13,7 @@
  * read from the page and checked for what every export shows.
  */
 import { expect, test, type Locator } from '@playwright/test';
-import { expectTabElements, openTab, searchFor, useSettingsTab } from '../support/admin-settings';
+import { expectTabElements, openTab, searchFor, useSettingsTab } from '../../support/admin-settings';
 
 // The list is searched on the server, which can take a while to answer.
 const searchTime = 15000;

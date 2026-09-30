@@ -15,7 +15,7 @@
  * account, so they are read from the page rather than expected by name.
  */
 import { expect, test, type Locator } from '@playwright/test';
-import { expectMenuOptions, expectTabElements, openTab, reopenTab, searchFor, useSettingsTab } from '../support/admin-settings';
+import { expectMenuOptions, expectTabElements, openTab, reopenTab, searchFor, useSettingsTab } from '../../support/admin-settings';
 
 type Label = { name: string; linked: number };
 

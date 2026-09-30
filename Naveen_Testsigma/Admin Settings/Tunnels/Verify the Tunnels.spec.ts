@@ -14,7 +14,7 @@
  * account, so they are read from the page.
  */
 import { expect, test, type Locator } from '@playwright/test';
-import { expectMenuOptions, expectTabElements, openTab, reopenTab, searchFor, useSettingsTab } from '../support/admin-settings';
+import { expectMenuOptions, expectTabElements, openTab, reopenTab, searchFor, useSettingsTab } from '../../support/admin-settings';
 
 const noResults = 'No results found for this search criteria';
 // The list is searched on the server, which can take a while to answer.

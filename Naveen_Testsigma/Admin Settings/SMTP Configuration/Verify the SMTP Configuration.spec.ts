@@ -9,7 +9,7 @@
  * How the account sends mail applies as soon as it is changed, so nothing on this tab is clicked.
  */
 import { expect, test } from '@playwright/test';
-import { expectTabElements, openTab, useSettingsTab } from '../support/admin-settings';
+import { expectTabElements, openTab, useSettingsTab } from '../../support/admin-settings';
 
 test.describe('Verify the SMTP Configuration', () => {
 	const run = useSettingsTab('SMTP Configuration');

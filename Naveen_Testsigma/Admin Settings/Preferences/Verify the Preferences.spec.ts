@@ -13,7 +13,7 @@
  * switches are checked for what they show, and whether each is on or off is noted rather than expected.
  */
 import { expect, test } from '@playwright/test';
-import { expectTabElements, openTab, useSettingsTab } from '../support/admin-settings';
+import { expectTabElements, openTab, useSettingsTab } from '../../support/admin-settings';
 
 type Preference = { name: string; description: string | RegExp };
 

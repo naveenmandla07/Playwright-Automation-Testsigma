@@ -18,7 +18,7 @@
  * details are checked to be filled in, not for their values, since they belong to the account.
  */
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { expectTabElements, openTab, useSettingsTab } from '../support/admin-settings';
+import { expectTabElements, openTab, useSettingsTab } from '../../support/admin-settings';
 
 // What a popup shows: its heading, its fields and buttons, and anything else on it.
 type Popup = {

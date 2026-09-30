@@ -9,7 +9,7 @@
  * The tab only shows what each role may do; there is nothing on it to change.
  */
 import { expect, test } from '@playwright/test';
-import { expectTabElements, openTab, useSettingsTab } from '../support/admin-settings';
+import { expectTabElements, openTab, useSettingsTab } from '../../support/admin-settings';
 
 const roles = [
 	{ name: 'Super Administrator', about: 'Has complete control over the Testsigma account, but is restricted from viewing Account or Billing related information.' },
