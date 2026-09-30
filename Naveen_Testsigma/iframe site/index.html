@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Iframe Automation Testing</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      margin: 25px;
+      background-color: #ffffff;
+    }
+
+    h1 {
+      margin-bottom: 20px;
+    }
+
+    .description {
+      color: #555;
+      margin-bottom: 25px;
+    }
+
+    .main-container {
+      border: 2px solid #333;
+      padding: 25px;
+      border-radius: 8px;
+    }
+
+    .frame-label {
+      font-weight: bold;
+      margin-bottom: 15px;
+    }
+
+    .required {
+      color: red;
+    }
+
+    input {
+      width: 280px;
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid #888;
+      border-radius: 4px;
+    }
+
+    button {
+      padding: 10px 18px;
+      margin-left: 8px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    .error {
+      display: none;
+      color: red;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+
+    .success {
+      display: none;
+      color: green;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+
+    iframe {
+      width: 100%;
+      height: 550px;
+      border: 2px solid #777;
+      margin-top: 25px;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ===================================================== -->
+  <!-- MAIN FRAME -->
+  <!-- ===================================================== -->
+
+  <h1>Iframe Automation Test Website</h1>
+
+  <p class="description">
+    Main Frame → Child Frame 1 → Child Frame 2
+  </p>
+
+  <div
+    class="main-container"
+    id="mainFrameContainer"
+    data-testid="main-frame-container"
+  >
+
+    <h2>Main Frame</h2>
+
+    <div class="frame-label">
+      Main Username
+      <span class="required">*</span>
+    </div>
+
+    <input
+      type="text"
+      id="mainInput"
+      name="mainUsername"
+      placeholder="Enter Main Username"
+      data-testid="main-input"
+      aria-required="true"
+    >
+
+    <button
+      type="button"
+      id="mainSubmit"
+      name="mainSubmit"
+      data-testid="main-submit"
+      onclick="submitMain()"
+    >
+      Main Submit Button
+    </button>
+
+    <div
+      id="mainError"
+      class="error"
+      data-testid="main-error"
+    >
+      Main Username is required.
+    </div>
+
+    <div
+      id="mainSuccess"
+      class="success"
+      data-testid="main-success"
+    >
+      Main form submitted successfully.
+    </div>
+
+    <!-- =================================================== -->
+    <!-- CHILD FRAME 1 -->
+    <!-- =================================================== -->
+
+    <iframe
+      id="child1Frame"
+      name="child1Frame"
+      title="Child Frame 1"
+      data-testid="child1-frame"
+    ></iframe>
+
+  </div>
+
+
+  <script>
+
+    /*
+    =========================================================
+    MAIN FRAME VALIDATION
+    =========================================================
+    */
+
+    function submitMain() {
+
+      const input =
+        document.getElementById("mainInput");
+
+      const error =
+        document.getElementById("mainError");
+
+      const success =
+        document.getElementById("mainSuccess");
+
+
+      if (input.value.trim() === "") {
+
+        error.style.display = "block";
+        success.style.display = "none";
+
+        input.focus();
+
+        return;
+      }
+
+
+      error.style.display = "none";
+      success.style.display = "block";
+    }
+
+
+    /*
+    =========================================================
+    CHILD FRAME 2 HTML
+    =========================================================
+    */
+
+    const child2HTML = `
+
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<style>
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  margin: 20px;
+  background-color: #f0f8ff;
+}
+
+.container {
+  border: 2px solid #1e73be;
+  padding: 20px;
+  border-radius: 6px;
+}
+
+h2 {
+  color: #1e73be;
+}
+
+.required {
+  color: red;
+}
+
+input {
+  width: 260px;
+  padding: 10px;
+  font-size: 15px;
+}
+
+button {
+  padding: 10px 18px;
+  margin-left: 8px;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.error {
+  display: none;
+  color: red;
+  font-weight: bold;
+  margin-top: 10px;
+}
+
+.success {
+  display: none;
+  color: green;
+  font-weight: bold;
+  margin-top: 10px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div
+  class="container"
+  id="child2Container"
+  data-testid="child2-container"
+>
+
+<h2>Child Frame 2</h2>
+
+<p>
+  You are currently inside
+  <strong>Child Frame 2</strong>.
+</p>
+
+<label for="child2Input">
+
+  Child 2 Username
+
+  <span class="required">*</span>
+
+</label>
+
+<br><br>
+
+<input
+  type="text"
+  id="child2Input"
+  name="child2Username"
+  placeholder="Enter Child 2 Username"
+  data-testid="child2-input"
+  aria-required="true"
+>
+
+<button
+  type="button"
+  id="child2Submit"
+  name="child2Submit"
+  data-testid="child2-submit"
+  onclick="submitChild2()"
+>
+  Child2 Submit Button
+</button>
+
+<div
+  id="child2Error"
+  class="error"
+  data-testid="child2-error"
+>
+  Child 2 Username is required.
+</div>
+
+<div
+  id="child2Success"
+  class="success"
+  data-testid="child2-success"
+>
+  Child 2 form submitted successfully.
+</div>
+
+</div>
+
+
+<script>
+
+function submitChild2() {
+
+  const input =
+    document.getElementById("child2Input");
+
+  const error =
+    document.getElementById("child2Error");
+
+  const success =
+    document.getElementById("child2Success");
+
+
+  if (input.value.trim() === "") {
+
+    error.style.display = "block";
+
+    success.style.display = "none";
+
+    input.focus();
+
+    return;
+  }
+
+
+  error.style.display = "none";
+
+  success.style.display = "block";
+}
+
+<\/script>
+
+</body>
+
+</html>
+
+`;
+
+
+    /*
+    =========================================================
+    CHILD FRAME 1 HTML
+    =========================================================
+    */
+
+    const child1HTML = `
+
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<style>
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  margin: 20px;
+  background-color: #fffaf0;
+}
+
+.container {
+  border: 2px solid #d58a00;
+  padding: 20px;
+  border-radius: 6px;
+}
+
+h2 {
+  color: #b87300;
+}
+
+.required {
+  color: red;
+}
+
+input {
+  width: 260px;
+  padding: 10px;
+  font-size: 15px;
+}
+
+button {
+  padding: 10px 18px;
+  margin-left: 8px;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.error {
+  display: none;
+  color: red;
+  font-weight: bold;
+  margin-top: 10px;
+}
+
+.success {
+  display: none;
+  color: green;
+  font-weight: bold;
+  margin-top: 10px;
+}
+
+iframe {
+  width: 100%;
+  height: 280px;
+  border: 2px solid #1e73be;
+  margin-top: 25px;
+}
+
+</style>
+
+</head>
+
+
+<body>
+
+<div
+  class="container"
+  id="child1Container"
+  data-testid="child1-container"
+>
+
+<h2>Child Frame 1</h2>
+
+<p>
+  You are currently inside
+  <strong>Child Frame 1</strong>.
+</p>
+
+
+<label for="child1Input">
+
+  Child 1 Username
+
+  <span class="required">*</span>
+
+</label>
+
+<br><br>
+
+
+<input
+  type="text"
+  id="child1Input"
+  name="child1Username"
+  placeholder="Enter Child 1 Username"
+  data-testid="child1-input"
+  aria-required="true"
+>
+
+
+<button
+  type="button"
+  id="child1Submit"
+  name="child1Submit"
+  data-testid="child1-submit"
+  onclick="submitChild1()"
+>
+  Child1 Submit Button
+</button>
+
+
+<div
+  id="child1Error"
+  class="error"
+  data-testid="child1-error"
+>
+  Child 1 Username is required.
+</div>
+
+
+<div
+  id="child1Success"
+  class="success"
+  data-testid="child1-success"
+>
+  Child 1 form submitted successfully.
+</div>
+
+
+<!-- ================================================ -->
+<!-- CHILD FRAME 2 -->
+<!-- ================================================ -->
+
+<iframe
+  id="child2Frame"
+  name="child2Frame"
+  title="Child Frame 2"
+  data-testid="child2-frame"
+></iframe>
+
+
+</div>
+
+
+<script>
+
+function submitChild1() {
+
+  const input =
+    document.getElementById("child1Input");
+
+  const error =
+    document.getElementById("child1Error");
+
+  const success =
+    document.getElementById("child1Success");
+
+
+  if (input.value.trim() === "") {
+
+    error.style.display = "block";
+
+    success.style.display = "none";
+
+    input.focus();
+
+    return;
+  }
+
+
+  error.style.display = "none";
+
+  success.style.display = "block";
+}
+
+<\/script>
+
+</body>
+
+</html>
+
+`;
+
+
+    /*
+    =========================================================
+    LOAD CHILD FRAME 1
+    =========================================================
+    */
+
+    const child1Frame =
+      document.getElementById("child1Frame");
+
+    child1Frame.srcdoc = child1HTML;
+
+
+    /*
+    =========================================================
+    LOAD CHILD FRAME 2 INSIDE CHILD FRAME 1
+    =========================================================
+    */
+
+    child1Frame.onload = function () {
+
+      const child1Document =
+        child1Frame.contentDocument ||
+        child1Frame.contentWindow.document;
+
+
+      const child2Frame =
+        child1Document.getElementById("child2Frame");
+
+
+      child2Frame.srcdoc = child2HTML;
+    };
+
+  </script>
+
+</body>
+</html>
