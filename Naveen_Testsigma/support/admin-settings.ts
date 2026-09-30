@@ -2,7 +2,7 @@
  * What the Admin Settings specs share: signing in with the news prompt kept out of the way, opening Settings and
  * its tabs, and each tab's elements, checked by the all-tabs spec and by each tab's own spec.
  */
-import { expect, type Browser, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Browser, type Locator, type Page, type Request } from '@playwright/test';
 import { signInToTestsigma } from './testsigma-auth';
 
 // Each tab is given this long after it opens so everything it loads is shown before it is checked.
@@ -365,4 +365,83 @@ export async function reopenTab(page: Page, tab: SettingsTab) {
 	await page.goto(`settings/${tab.path}`);
 	await expectTitle(page.locator('main'), tab);
 	await page.waitForTimeout(settleTime);
+}
+
+// What a tab's spec works with: the signed-in page, its main area and the tab.
+export type SettingsTabRun = { page: Page; main: Locator; tab: SettingsTab };
+
+/**
+ * Sets up a spec for one Admin Settings tab: its checks run in order on one signed-in page on that tab, but one
+ * that fails does not stop the rest. Each check starts on the tab with no popup open, and fails if it sent any
+ * change to Testsigma, since these specs only look and never save.
+ */
+export function useSettingsTab(name: string): SettingsTabRun {
+	const run = { tab: findTab(name) } as SettingsTabRun;
+	const changes: string[] = [];
+	const recordChange = (request: Request) => {
+		const url = new URL(request.url());
+		if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method()) && url.hostname === 'app.testsigma.com') {
+			changes.push(`${request.method()} ${url.pathname}`);
+		}
+	};
+
+	test.describe.configure({ mode: 'default', timeout: 120000 });
+	test.skip(!process.env.TESTSIGMA_EMAIL || !process.env.TESTSIGMA_PASSWORD, 'Set TESTSIGMA_EMAIL and TESTSIGMA_PASSWORD in .env to run this test.');
+
+	test.beforeAll(async ({ browser }) => {
+		run.page = await openSignedInSettings(browser);
+		run.main = run.page.locator('main');
+		run.page.on('request', recordChange);
+		await openTab(run.page, run.tab);
+	});
+
+	test.afterAll(async () => {
+		await run.page.close();
+	});
+
+	test.beforeEach(async () => {
+		changes.length = 0;
+		// A check that failed may have left a popup open. Some popups ignore Escape, and those are left behind by
+		// loading the tab afresh.
+		if (await run.page.getByRole('dialog').count()) {
+			await run.page.keyboard.press('Escape');
+		}
+		const popupLeft = await run.page.getByRole('dialog').count() > 0;
+		// A check that failed may also have left the tab, and after a failure the checks go on in a new page.
+		if (popupLeft || !new URL(run.page.url()).pathname.endsWith(`/settings/${run.tab.path}`)) {
+			await reopenTab(run.page, run.tab);
+		}
+		await expect(run.page.getByRole('dialog')).toHaveCount(0);
+	});
+
+	test.afterEach(async () => {
+		expect(changes, 'changes sent to Testsigma').toEqual([]);
+	});
+
+	return run;
+}
+
+/**
+ * Searches a tab's list and waits for the results to satisfy expectResults. A search typed while the tab is still
+ * loading can be lost, leaving the list as it was, so the term is typed again until the results arrive.
+ */
+export async function searchFor(box: Locator, term: string, expectResults: () => Promise<void>) {
+	await expect(async () => {
+		await box.clear();
+		await box.pressSequentially(term);
+		await expectResults();
+	}).toPass({ timeout: 60000 });
+}
+
+/**
+ * Opens a menu of options, such as "Sort by", and checks each option is shown. An option can share its text with
+ * something already on the tab, such as a column heading, so each must add one more of its text to the tab.
+ */
+export async function expectMenuOptions(main: Locator, open: () => Promise<void>, options: string[]) {
+	const shown = (option: string) => main.getByText(option, { exact: true }).filter({ visible: true });
+	const before = await Promise.all(options.map((option) => shown(option).count()));
+	await open();
+	for (const [index, option] of options.entries()) {
+		await expect.soft(shown(option), `option ${option}`).toHaveCount(before[index] + 1);
+	}
 }

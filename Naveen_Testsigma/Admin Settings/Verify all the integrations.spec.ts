@@ -10,13 +10,15 @@
  *   - when it is switched off, switch it on and check the popup that asks for its details, then cancel it;
  *   - when its switch cannot be used, or it has none, check that.
  *
+ * Test Management by Testsigma shows, in place of a switch, an icon saying it waits for a user invitation.
+ *
  * Nothing is saved: a switched-off integration only turns on once its details are saved, which this never does, so
  * every popup is cancelled or closed, and each check confirms the switch is back where it started and that no
  * change was sent to Testsigma. "Delete credentials" and "Update details" are checked but never clicked. Saved
  * details are checked to be filled in, not for their values, since they belong to the account.
  */
-import { expect, test, type Locator, type Page, type Request } from '@playwright/test';
-import { expectTabElements, findTab, openSignedInSettings, openTab } from '../support/admin-settings';
+import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expectTabElements, openTab, useSettingsTab } from '../support/admin-settings';
 
 // What a popup shows: its heading, its fields and buttons, and anything else on it.
 type Popup = {
@@ -45,6 +47,8 @@ type Integration = {
 	setup?: Popup;
 	// The popup shown by "Manage" once it is set up.
 	manage?: Popup;
+	// What the integration is waiting for, shown on hovering the icon in place of its switch.
+	pending?: string;
 };
 
 const categories = ['All Integrations', 'Bug Reporting', 'Collaboration', 'Test Lab', 'Test Management', 'Product Management', 'CICD'];
@@ -89,6 +93,7 @@ const integrations: Integration[] = [
 		description: 'Enable your team to link Testsigma test Cases with Testsigma’s Test Management System',
 		docs: `${docs}/test-management/testsigma-two-way-integration/connect-testsigma/`,
 		switch: 'none',
+		pending: 'Pending User Invitation',
 	},
 	{
 		name: 'Xray Cloud',
@@ -437,79 +442,49 @@ async function expectPopup(popup: Locator, expected: Popup, saved: boolean) {
 }
 
 test.describe('Verify all the integrations', () => {
-	// The checks run in order on one signed-in page, but one that fails does not stop the rest.
-	test.describe.configure({ mode: 'default', timeout: 120000 });
-	test.skip(!process.env.TESTSIGMA_EMAIL || !process.env.TESTSIGMA_PASSWORD, 'Set TESTSIGMA_EMAIL and TESTSIGMA_PASSWORD in .env to run this test.');
-
-	const tab = findTab('Integrations');
-	let page: Page;
-	let main: Locator;
-	// Every change sent to Testsigma while a check runs; each check expects none.
-	const changes: string[] = [];
-	const recordChange = (request: Request) => {
-		const url = new URL(request.url());
-		if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method()) && url.hostname === 'app.testsigma.com') {
-			changes.push(`${request.method()} ${url.pathname}`);
-		}
-	};
-
-	test.beforeAll(async ({ browser }) => {
-		page = await openSignedInSettings(browser);
-		main = page.locator('main');
-		page.on('request', recordChange);
-	});
-
-	test.afterAll(async () => {
-		await page.close();
-	});
-
-	test.beforeEach(async () => {
-		changes.length = 0;
-		// A check that failed may have left a popup open.
-		await page.keyboard.press('Escape');
-		await expect(page.getByRole('dialog')).toHaveCount(0);
-	});
-
-	test.afterEach(async () => {
-		expect(changes, 'changes sent to Testsigma').toEqual([]);
-	});
+	const run = useSettingsTab('Integrations');
 
 	test('Open the Integrations tab and check its elements', async () => {
-		await openTab(page, tab);
-		await expectTabElements(main, tab);
+		await openTab(run.page, run.tab);
+		await expectTabElements(run.main, run.tab);
 	});
 
 	test('Scroll to the end of the list', async () => {
-		await main.getByText('All Integrations', { exact: true }).click();
-		const last = cardOf(main, integrations[integrations.length - 1]);
+		await run.main.getByText('All Integrations', { exact: true }).click();
+		const last = cardOf(run.main, integrations[integrations.length - 1]);
 		await last.scrollIntoViewIfNeeded();
 		await expect(last).toBeInViewport();
-		await expect(main.getByRole('link', { name: 'Learn more' }).last()).toBeInViewport();
-		expect(await shownIntegrations(page)).toEqual(categoryIntegrations['All Integrations']);
-		await main.getByText('All Integrations', { exact: true }).scrollIntoViewIfNeeded();
+		await expect(run.main.getByRole('link', { name: 'Learn more' }).last()).toBeInViewport();
+		expect(await shownIntegrations(run.page)).toEqual(categoryIntegrations['All Integrations']);
+		await run.main.getByText('All Integrations', { exact: true }).scrollIntoViewIfNeeded();
 	});
 
 	for (const category of categories) {
 		test(`Category tab: ${category}`, async () => {
-			await main.getByText(category, { exact: true }).first().click();
+			await run.main.getByText(category, { exact: true }).first().click();
 			const expected = categoryIntegrations[category];
-			await expect.poll(() => shownIntegrations(page), { message: `integrations under ${category}` }).toEqual(expected);
-			await expect(main.getByRole('link', { name: 'Learn more' }).filter({ visible: true })).toHaveCount(expected.length);
-			await main.getByText('All Integrations', { exact: true }).click();
-			await expect.poll(() => shownIntegrations(page)).toHaveLength(integrations.length);
+			await expect.poll(() => shownIntegrations(run.page), { message: `integrations under ${category}` }).toEqual(expected);
+			await expect(run.main.getByRole('link', { name: 'Learn more' }).filter({ visible: true })).toHaveCount(expected.length);
+			await run.main.getByText('All Integrations', { exact: true }).click();
+			await expect.poll(() => shownIntegrations(run.page)).toHaveLength(integrations.length);
 		});
 	}
 
 	for (const integration of integrations) {
 		test(`Integration: ${integration.name}`, async () => {
-			const card = cardOf(main, integration);
+			const card = cardOf(run.main, integration);
 			await card.scrollIntoViewIfNeeded();
 			await expect(card.getByRole('img', { name: 'logo' })).toBeVisible();
-			await expect(nameOf(main, integration).first()).toBeVisible();
+			await expect(nameOf(run.main, integration).first()).toBeVisible();
 			await expect.soft(card.getByText(new RegExp(`^${escapeRegExp(integration.description)}`))).toBeVisible();
 			await expect.soft(card.getByRole('link', { name: 'Learn more' })).toHaveAttribute('href', integration.docs);
 
 			const manage = card.getByRole('button', { name: 'Manage', exact: true });
+			if (integration.pending) {
+				// In place of a switch, an icon says what the integration is waiting for.
+				await card.locator('svg').last().hover();
+				await expect.soft(run.page.getByRole('tooltip', { name: integration.pending }).first()).toBeVisible();
+			}
 			if (integration.switch === 'none') {
 				await expect(switchOf(card)).toHaveCount(0);
 				await expect(manage).toHaveCount(0);
@@ -522,7 +497,7 @@ test.describe('Verify all the integrations', () => {
 				return;
 			}
 
-			const popup = page.getByRole('dialog');
+			const popup = run.page.getByRole('dialog');
 			const isOn = await switchOf(card).isChecked();
 			test.info().annotations.push({ type: 'switch', description: `${integration.name} is switched ${isOn ? 'on' : 'off'}` });
 			if (isOn) {
@@ -531,7 +506,7 @@ test.describe('Verify all the integrations', () => {
 				await manage.click();
 				const expected = integration.manage ?? savedDetails(integration.name, []);
 				await expectPopup(popup, expected, true);
-				await page.keyboard.press('Escape');
+				await run.page.keyboard.press('Escape');
 				await expect(popup).toHaveCount(0);
 				await expect(switchOf(card)).toBeChecked();
 			} else {
