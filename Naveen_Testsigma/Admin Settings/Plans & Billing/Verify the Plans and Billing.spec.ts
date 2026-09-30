@@ -14,6 +14,7 @@
  */
 import { expect, test } from '@playwright/test';
 import { expectTabElements, openTab, useSettingsTab } from '../../support/admin-settings';
+import { escapeRegExp } from '../../support/common';
 
 const plans = [
 	{
@@ -77,7 +78,7 @@ test.describe('Verify the Plans and Billing', () => {
 			const box = form.getByRole('textbox', { name: field, exact: true });
 			await expect.soft(box, field).not.toHaveValue('');
 			const value = await box.inputValue();
-			await expect.soft(run.main.getByText(new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))).first(), `${field} shown on the tab`).toBeVisible();
+			await expect.soft(run.main.getByText(new RegExp(escapeRegExp(value))).first(), `${field} shown on the tab`).toBeVisible();
 		}
 		await expect(form.getByText(/^Country\*?/)).toBeVisible();
 		await expect(form.getByRole('button', { name: 'Update', exact: true })).toBeVisible();

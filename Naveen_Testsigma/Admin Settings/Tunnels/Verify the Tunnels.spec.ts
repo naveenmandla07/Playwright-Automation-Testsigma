@@ -14,13 +14,9 @@
  * account, so they are read from the page.
  */
 import { expect, test, type Locator } from '@playwright/test';
-import { expectMenuOptions, expectTabElements, openTab, reopenTab, searchFor, useSettingsTab } from '../../support/admin-settings';
+import { expectMenuOptions, expectTabElements, openTab, reopenTab, searchAttemptTime, searchFor, searchTime, useSettingsTab } from '../../support/admin-settings';
+import { byName, noResults } from '../../support/common';
 
-const noResults = 'No results found for this search criteria';
-// The list is searched on the server, which can take a while to answer.
-const searchTime = 15000;
-// How long each attempt at a search waits for its results before typing it again.
-const searchAttemptTime = 10000;
 const client = 'https://static-assets.testsigma.com/testsigma-tunnel-client/latest';
 
 // The tunnel client for each system, for both processor types.
@@ -111,7 +107,6 @@ test.describe('Verify the Tunnels', () => {
 	test('Sort the tunnels', async () => {
 		await expectMenuOptions(run.main, () => run.main.getByText('Sort by', { exact: true }).click(), ['Name', 'A to Z', 'Z to A']);
 		const names = await tunnelNames(run.main);
-		const byName = (a: string, b: string) => a.localeCompare(b, 'en', { sensitivity: 'base' });
 		await sortBy('Z to A');
 		await expect.poll(() => tunnelNames(run.main)).toEqual([...names].sort(byName).reverse());
 		await sortBy('A to Z');

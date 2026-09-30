@@ -13,12 +13,7 @@
  * read from the page and checked for what every export shows.
  */
 import { expect, test, type Locator } from '@playwright/test';
-import { expectTabElements, openTab, searchFor, useSettingsTab } from '../../support/admin-settings';
-
-// The list is searched on the server, which can take a while to answer.
-const searchTime = 15000;
-// How long each attempt at a search waits for its results before typing it again.
-const searchAttemptTime = 10000;
+import { expectTabElements, openTab, searchAttemptTime, searchFor, searchTime, useSettingsTab } from '../../support/admin-settings';
 
 // Each export is a row inside the grid's own wrapping row.
 function exportRows(main: Locator) {

@@ -18,6 +18,7 @@
 import path from 'node:path';
 import { expect, test, type Locator, type Page, type Response } from '@playwright/test';
 import { missingCredentials, missingCredentialsMessage, signInToTestsigma } from '../support/testsigma-auth';
+import { escapeRegExp } from '../support/common';
 
 
 const runId = Date.now();
@@ -61,10 +62,6 @@ async function openTestDataProfiles(page: Page) {
 async function reloadTestDataProfiles(page: Page) {
 	await page.goto(page.url().replace(/\/data\/folders.*$/, '/data/folders'));
 	await expect(page.getByRole('tree')).toBeVisible({ timeout: 30000 });
-}
-
-function escapeRegExp(value: string) {
-	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // Folder rows are named after the folder plus an item count once it has children, e.g. "Feature (2)".

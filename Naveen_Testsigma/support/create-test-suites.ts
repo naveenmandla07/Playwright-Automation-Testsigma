@@ -4,6 +4,7 @@
  */
 import { expect, test, type Browser, type Locator, type Page, type Request } from '@playwright/test';
 import { signInToTestsigma } from './testsigma-auth';
+import { escapeRegExp } from './common';
 
 const projectName = '[9.0.8] Accessibility';
 const versionName = '1';
@@ -151,10 +152,6 @@ async function saveSuite(page: Page, versionId: number, name: string, cases: Tes
 	const stored = await (await page.request.get(`/private/test_suites/${created.id}`)).json();
 	expect(stored).toMatchObject({ name, appVersionId: versionId, totalTestCasesCount: cases.length });
 	return created;
-}
-
-function escapeRegExp(text: string) {
-	return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export const suiteNames = { allCases: allCasesSuiteName, randomCases: randomCasesSuiteName };

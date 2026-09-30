@@ -16,8 +16,9 @@
  * checked but never clicked. The users belong to the account, so they are read from the page.
  */
 import { expect, test, type Locator } from '@playwright/test';
-import { expectMenuOptions, expectTabElements, openTab, reopenTab, searchFor, useSettingsTab } from '../../support/admin-settings';
+import { expectMenuOptions, expectTabElements, openTab, reopenTab, searchAttemptTime, searchFor, searchTime, useSettingsTab } from '../../support/admin-settings';
 import { accountEmail } from '../../support/testsigma-auth';
+import { byName, noResults } from '../../support/common';
 
 type User = { name: string; status: string; email: string; allocation: string; roles: string };
 
@@ -30,10 +31,6 @@ const groups = [
 ];
 const sortOptions = ['Name', 'Created Date', 'Updated Date', 'A to Z', 'Z to A'];
 const noUsers = 'No Users Available';
-// The list is searched on the server, which can take a while to answer.
-const searchTime = 15000;
-// How long each attempt at a search waits for its results before typing it again.
-const searchAttemptTime = 10000;
 const neverInvited = 'playwright.never.invited@example.com';
 
 // Each user is a row inside the grid's own wrapping row.
@@ -54,10 +51,6 @@ async function listedUsers(main: Locator): Promise<User[]> {
 			allocation: lines[emailAt + 1],
 		};
 	}));
-}
-
-function byName(a: string, b: string) {
-	return a.localeCompare(b, 'en', { sensitivity: 'base' });
 }
 
 test.describe('Verify the Users', () => {
@@ -143,7 +136,7 @@ test.describe('Verify the Users', () => {
 				.toEqual(matching.map((user) => user.email).sort());
 		});
 		await search.fill('zz-no-such-user');
-		await expect(run.main.getByText('No results found for this search criteria', { exact: true })).toBeVisible({ timeout: searchTime });
+		await expect(run.main.getByText(noResults, { exact: true })).toBeVisible({ timeout: searchTime });
 		await expect(run.main.getByRole('img', { name: 'Empty state illustration' })).toBeVisible();
 		await search.clear();
 		await expect.poll(() => listedUsers(run.main), { timeout: searchTime }).toEqual(users);

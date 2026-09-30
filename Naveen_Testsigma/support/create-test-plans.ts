@@ -6,6 +6,7 @@
 import { expect, test, type Locator, type Page, type Request } from '@playwright/test';
 import { hoverNavigation, type SuiteApplication } from './create-test-suites';
 import { accountEmail } from './testsigma-auth';
+import { escapeRegExp, noResults } from './common';
 
 // A user-defined machine profile; otherDevice puts it on a device no earlier profile of the plan uses.
 export type UserDefinedMachine = { name: string; otherDevice?: boolean };
@@ -56,7 +57,6 @@ const notificationStatuses = ['Passed', 'Failed', 'Not Executed', 'Queued', 'Sto
 const discardedLabel = 'discarded-label';
 const invalidEmail = 'not-an-email';
 const cancelledMachine = 'Cancelled machine profile';
-const noResults = 'No results found for this search criteria';
 
 // The Add Test Suites picker's filters and, where they are fixed, the options each offers.
 const suiteFilters = ['Test Case', 'Last Run Result', 'Created By', 'Created Date', 'Updated Date', 'Last Run Date', 'Labels', 'Linked To'];
@@ -146,7 +146,7 @@ function overlay(page: Page, title: string, button: string | RegExp) {
 
 // Field labels can carry a required-field asterisk, e.g. "Test Lab *".
 function fieldLabel(scope: Locator, label: string) {
-	return scope.getByText(new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\&]/g, '\\$&')}\\s*\\*?$`)).first();
+	return scope.getByText(new RegExp(`^${escapeRegExp(label)}\\s*\\*?$`)).first();
 }
 
 // Machine cards show how many suites they run, e.g. "2 Suites".

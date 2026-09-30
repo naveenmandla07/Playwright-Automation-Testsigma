@@ -4,9 +4,16 @@
  */
 import { expect, test, type Browser, type Locator, type Page, type Request } from '@playwright/test';
 import { missingCredentials, missingCredentialsMessage, signInToTestsigma } from './testsigma-auth';
+import { escapeRegExp } from './common';
 
 // Each tab is given this long after it opens so everything it loads is shown before it is checked.
 export const settleTime = 6000;
+
+// Lists are searched on the server, which can take a while to answer. Each attempt at a search waits
+// searchAttemptTime for its results before the search is typed again (see searchFor); other waits for a search's
+// results, such as for "No results", are given searchTime.
+export const searchAttemptTime = 10000;
+export const searchTime = 15000;
 
 // What a tab shows. Every text is matched exactly, and where the same text appears more than once, such as a
 // tab's title and its name in the tab list, the last one on the page is checked.
@@ -306,7 +313,7 @@ export async function expectTabElements(main: Locator, tab: SettingsTab) {
 		await expect.soft(main.getByRole('checkbox', { name, exact: true }).last(), `toggle ${name}`).toBeVisible();
 	}
 	for (const name of tab.radios ?? []) {
-		await expect.soft(main.getByRole('radio', { name: new RegExp(`^${name.replace(/[()]/g, '\\$&')}`) }), `option ${name}`).toBeVisible();
+		await expect.soft(main.getByRole('radio', { name: new RegExp(`^${escapeRegExp(name)}`) }), `option ${name}`).toBeVisible();
 	}
 	for (const name of tab.headings ?? []) {
 		await expect.soft(main.getByRole('heading', { name, exact: true }).last(), `heading ${name}`).toBeVisible();

@@ -19,6 +19,7 @@
  */
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { expectTabElements, openTab, useSettingsTab } from '../../support/admin-settings';
+import { escapeRegExp } from '../../support/common';
 
 // What a popup shows: its heading, its fields and buttons, and anything else on it.
 type Popup = {
@@ -375,10 +376,6 @@ const categoryIntegrations: Record<string, string[]> = {
 	'Product Management': ['Figma', 'Confluence Cloud', 'Confluence Server / Data Center', 'Trello', 'Linear', 'ClickUp'],
 	CICD: ['Azure DevOps', 'CircleCI', 'Bamboo', 'Amazon Web Services', 'TravisCI', 'Jenkins', 'CodeShip CI', 'GitHub CI/CD', 'GitLab CI/CD'],
 };
-
-function escapeRegExp(text: string) {
-	return text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
-}
 
 function nameOf(main: Locator, integration: Integration) {
 	return integration.match ? main.getByText(integration.match) : main.getByText(integration.name, { exact: true });

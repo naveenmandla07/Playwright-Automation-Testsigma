@@ -23,6 +23,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { openSignedInPage, projectName, switchToApplication, versionName } from '../support/create-test-suites';
 import { missingCredentials, missingCredentialsMessage } from '../support/testsigma-auth';
+import { escapeRegExp } from '../support/common';
 
 type SavePoint = { id: number; description: string; type: 'MANUAL' | 'IMPORT'; createdAtEpoch: number; applicationVersionId: number };
 
@@ -294,7 +295,7 @@ test.describe('Verify the functionality of save points', () => {
 		await expect(preview).toHaveURL(new RegExp(`/ui/preview/${created.id}/cases/filters`), { timeout: 30000 });
 		// The save point says when it was made and which project, application and version it holds.
 		await expect(previewMain.getByText(when).first()).toBeVisible({ timeout: 30000 });
-		await expect(previewMain.getByText(new RegExp(`${projectName.replace(/[[\].]/g, '\\$&')}\\s*${application.name}\\s*${versionName}`))).toBeVisible();
+		await expect(previewMain.getByText(new RegExp(`${escapeRegExp(projectName)}\\s*${application.name}\\s*${versionName}`))).toBeVisible();
 		await expect(previewMain.getByRole('button', { name: 'Restore to this Version' })).toBeEnabled();
 		for (const section of ['Tests', 'Test Cases', 'Step Groups', 'Elements', 'Test Data', 'Test Suites', 'Test Plans']) {
 			await expect.soft(previewMain.getByRole('button', { name: section, exact: true }), section).toBeVisible();

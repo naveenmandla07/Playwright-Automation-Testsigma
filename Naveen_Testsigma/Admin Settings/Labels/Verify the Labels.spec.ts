@@ -15,17 +15,13 @@
  * account, so they are read from the page rather than expected by name.
  */
 import { expect, test, type Locator } from '@playwright/test';
-import { expectMenuOptions, expectTabElements, openTab, reopenTab, searchFor, useSettingsTab } from '../../support/admin-settings';
+import { expectMenuOptions, expectTabElements, openTab, reopenTab, searchAttemptTime, searchFor, searchTime, useSettingsTab } from '../../support/admin-settings';
+import { byName, noResults } from '../../support/common';
 
 type Label = { name: string; linked: number };
 
 const sortOptions = ['Label Name', 'Created Date', 'Updated Date', 'A to Z', 'Z to A'];
 const entityKinds = ['Test Cases', 'Step Groups', 'Test Suites', 'Test Plans', 'Elements'];
-const noResults = 'No results found for this search criteria';
-// The list is searched on the server, which can take a while to answer.
-const searchTime = 15000;
-// How long each attempt at a search waits for its results before typing it again.
-const searchAttemptTime = 10000;
 
 // Each label is a row inside the grid's own wrapping row.
 function labelRows(main: Locator) {
@@ -39,10 +35,6 @@ async function listedLabels(main: Locator): Promise<Label[]> {
 		name: (await row.getByRole('gridcell').first().innerText()).trim(),
 		linked: Number((await row.getByRole('gridcell').nth(1).innerText()).trim()),
 	})));
-}
-
-function byName(a: string, b: string) {
-	return a.localeCompare(b, 'en', { sensitivity: 'base' });
 }
 
 test.describe('Verify the Labels', () => {

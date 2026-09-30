@@ -14,6 +14,7 @@
  */
 import { expect, test } from '@playwright/test';
 import { expectTabElements, openTab, useSettingsTab } from '../../support/admin-settings';
+import { escapeRegExp } from '../../support/common';
 
 type Preference = { name: string; description: string | RegExp };
 
@@ -110,7 +111,7 @@ function asText(description: string | RegExp) {
 	if (typeof description !== 'string') {
 		return description;
 	}
-	const words = description.split(' ').map((word) => word.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&'));
+	const words = description.split(' ').map((word) => escapeRegExp(word));
 	return new RegExp(`^${words.join('\\s*')}$`);
 }
 

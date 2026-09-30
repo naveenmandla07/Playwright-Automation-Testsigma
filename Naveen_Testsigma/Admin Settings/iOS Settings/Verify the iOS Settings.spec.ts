@@ -14,12 +14,8 @@
  * clicked, and the delete icon is never used. The profiles belong to the account, so they are read from the page.
  */
 import { expect, test, type Locator } from '@playwright/test';
-import { expectTabElements, openTab, reopenTab, searchFor, useSettingsTab } from '../../support/admin-settings';
-
-// The list is searched on the server, which can take a while to answer.
-const searchTime = 15000;
-// How long each attempt at a search waits for its results before typing it again.
-const searchAttemptTime = 10000;
+import { expectTabElements, openTab, reopenTab, searchAttemptTime, searchFor, searchTime, useSettingsTab } from '../../support/admin-settings';
+import { escapeRegExp, noResults } from '../../support/common';
 
 // Each profile is a row inside the grid's own wrapping row.
 function profileRows(main: Locator) {
@@ -73,7 +69,7 @@ test.describe('Verify the iOS Settings', () => {
 			await expect.poll(() => profileNames(run.main), { timeout: searchAttemptTime }).toEqual(all.filter((name) => name.toLowerCase().includes(first.toLowerCase())));
 		});
 		await search.fill('zz-no-such-profile');
-		await expect(run.main.getByText('No results found for this search criteria', { exact: true })).toBeVisible({ timeout: searchTime });
+		await expect(run.main.getByText(noResults, { exact: true })).toBeVisible({ timeout: searchTime });
 		await expect(run.main.getByRole('img', { name: 'Empty state illustration' })).toBeVisible();
 		await search.clear();
 		await expect.poll(() => profileNames(run.main), { timeout: searchTime }).toEqual(all);
@@ -90,7 +86,7 @@ test.describe('Verify the iOS Settings', () => {
 		];
 		for (const step of steps) {
 			await expect.soft(run.main.getByRole('heading', { name: step.number, exact: true }), `step ${step.number}`).toBeVisible();
-			await expect.soft(run.main.getByRole('paragraph').filter({ hasText: new RegExp(`^${step.title.replace(/[()]/g, '\\$&')}$`) }), step.title).toBeVisible();
+			await expect.soft(run.main.getByRole('paragraph').filter({ hasText: new RegExp(`^${escapeRegExp(step.title)}$`) }), step.title).toBeVisible();
 			if (step.about) {
 				await expect.soft(run.main.getByRole('paragraph').filter({ hasText: step.about }), step.title).toBeVisible();
 			}
