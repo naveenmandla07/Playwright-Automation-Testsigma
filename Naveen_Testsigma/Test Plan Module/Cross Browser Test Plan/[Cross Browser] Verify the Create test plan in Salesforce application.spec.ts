@@ -34,7 +34,8 @@ import {
 	type PlanRun,
 	type PlanScenario,
 } from '../../support/create-test-plans';
-import { openSignedInPage, projectName, suiteNames, switchToApplication, versionName } from '../../support/create-test-suites';
+import { openSignedInPage, projectName, switchToApplication, versionName } from '../../support/accessibility-project';
+import { suiteNames } from '../../support/create-test-suites';
 import { missingCredentials, missingCredentialsMessage } from '../../support/testsigma-auth';
 
 const plan: PlanScenario = {

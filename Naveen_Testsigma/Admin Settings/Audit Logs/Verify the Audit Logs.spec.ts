@@ -14,7 +14,7 @@
  */
 import { expect, test, type Locator } from '@playwright/test';
 import { expectTabElements, openTab, reopenTab, useSettingsTab } from '../../support/admin-settings';
-import { projectName } from '../../support/create-test-suites';
+import { projectName } from '../../support/accessibility-project';
 import { accountEmail } from '../../support/testsigma-auth';
 
 const eventTypes = ['Test Case', 'Element', 'Test Plan', 'Test Suite', 'Test Data', 'Environment', 'Variable', 'Authentication', 'Access Bridge'];

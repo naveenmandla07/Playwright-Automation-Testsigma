@@ -16,15 +16,11 @@ import { test, type Page } from '@playwright/test';
 import {
 	createSuiteWithAllCases,
 	createSuiteWithRandomCases,
-	openSignedInPage,
-	projectName,
 	suiteNames,
-	switchToApplication,
 	verifyCreateFormAndPicker,
 	verifyTestSuitesPage,
-	versionName,
-	type SuiteApplication,
 } from '../support/create-test-suites';
+import { openSignedInPage, projectName, switchToApplication, versionName, type SuiteApplication } from '../support/accessibility-project';
 import { missingCredentials, missingCredentialsMessage } from '../support/testsigma-auth';
 
 const application: SuiteApplication = { name: 'Web App', type: 'WebApplication' };

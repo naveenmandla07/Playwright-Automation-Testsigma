@@ -14,6 +14,13 @@ export class SideNavigation {
 		return this.page.getByRole('navigation');
 	}
 
+	// Shows the labels by hovering at the given height. Moving onto the spot the pointer is already on does not count
+	// as hovering, so move away first.
+	async hover(y: number) {
+		await this.page.mouse.move(800, 500);
+		await this.page.mouse.move(20, y);
+	}
+
 	link(name: string) {
 		return this.root.getByRole('link', { name });
 	}

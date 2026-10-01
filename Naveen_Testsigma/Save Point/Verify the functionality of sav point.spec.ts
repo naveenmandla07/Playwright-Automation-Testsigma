@@ -24,7 +24,7 @@
  * account's current project.
  */
 import { expect, test, type Page } from '@playwright/test';
-import { openSignedInPage, projectName, switchToApplication, versionName } from '../support/create-test-suites';
+import { openSignedInPage, projectName, switchToApplication, versionName } from '../support/accessibility-project';
 import { missingCredentials, missingCredentialsMessage } from '../support/testsigma-auth';
 import { SavePointsApi, type SavePoint } from '../pages/save-points/SavePointsApi';
 import { nameLimit, SavePointsPage, typeLabels, when } from '../pages/save-points/SavePointsPage';

@@ -3,6 +3,7 @@
  * the project, application and version to work on, and opens Project Settings and the New project form.
  */
 import { expect, type Page } from '@playwright/test';
+import { SideNavigation } from '../components/SideNavigation';
 import { NewProjectForm, type NewProject } from './NewProjectForm';
 import { ProjectSettingsDialog } from './ProjectSettingsDialog';
 
@@ -13,9 +14,14 @@ export class ProjectSwitcher {
 		this.page = page;
 	}
 
-	// The header button showing the current project, which opens the switcher.
+	// The header button showing the current project, which opens the switcher, as it shows for a web project.
 	get headerButton() {
 		return this.page.locator('[role="button"]').filter({ has: this.page.locator('[data-testid="web"]') });
+	}
+
+	// The same button found by its place, the side navigation's second button, whatever the application's type.
+	get navigationButton() {
+		return this.page.getByRole('navigation').getByRole('button').nth(1);
 	}
 
 	private dropdown(label: string) {
@@ -172,5 +178,60 @@ export class ProjectSwitcher {
 		const settings = new ProjectSettingsDialog(this.page);
 		await expect(settings.heading('Project Details')).toBeVisible();
 		return settings;
+	}
+
+	/**
+	 * Makes the project, application and version current, choosing each in the switcher only when it is not already
+	 * chosen, then reloads and checks the switcher shows them and the version's Test Suites link.
+	 */
+	async switchTo({ project: projectName, application: applicationName, version: versionName }: { project: string; application: string; version: string }, versionId: number) {
+		const navigation = new SideNavigation(this.page);
+		const { projectDropdown: project, applicationDropdown: application, versionDropdown: version, goToProjectButton: goToProject } = this;
+		const quickly = { timeout: 5000 };
+
+		// Dismissing the news-notification prompt closes the switcher, so start over whenever it closes midway.
+		await expect(async () => {
+			if (!(await project.isVisible())) {
+				await navigation.hover(100);
+				await this.navigationButton.click(quickly);
+				await expect(project).toBeVisible(quickly);
+			}
+			if ((await project.innerText()).trim() !== projectName) {
+				await project.click(quickly);
+				await this.searchField.fill(projectName, quickly);
+				await this.page.getByRole('row', { name: projectName, exact: true }).click(quickly);
+				await expect(project).toHaveText(projectName, quickly);
+			}
+			// Choosing a project selects its first application, so pick the application explicitly.
+			if ((await application.innerText()).trim() !== applicationName) {
+				await application.click(quickly);
+				await this.page.getByText(applicationName, { exact: true }).last().click(quickly);
+				await expect(application).toHaveText(applicationName, quickly);
+			}
+			if ((await version.innerText()).trim() !== versionName) {
+				await version.click(quickly);
+				await this.page.getByRole('row', { name: versionName, exact: true }).click(quickly);
+				await expect(version).toHaveText(versionName, quickly);
+			}
+
+			// "Go to project" stays disabled when the chosen version is already the current one.
+			if (await goToProject.isEnabled()) {
+				await goToProject.click(quickly);
+				await expect(this.page).toHaveURL(new RegExp(`/td/${versionId}/cases/filters`), { timeout: 30000 });
+			} else {
+				await this.page.keyboard.press('Escape');
+			}
+		}).toPass({ timeout: 90000 });
+
+		await this.page.reload();
+		await navigation.hover(100);
+		await expect(this.navigationButton).toHaveText(projectName, { timeout: 30000 });
+		await this.navigationButton.click();
+		await expect(project).toHaveText(projectName);
+		await expect(application).toHaveText(applicationName);
+		await expect(version).toHaveText(versionName);
+		await expect(goToProject).toBeDisabled();
+		await this.page.keyboard.press('Escape');
+		await expect(this.page.getByRole('link', { name: 'Test Suites', exact: true })).toHaveAttribute('href', `/ui/td/${versionId}/suites`);
 	}
 }

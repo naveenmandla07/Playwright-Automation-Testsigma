@@ -4,7 +4,8 @@
  * PlanScenario and runs these steps for it.
  */
 import { expect, test, type Locator, type Page, type Request } from '@playwright/test';
-import { hoverNavigation, type SuiteApplication } from './create-test-suites';
+import { SideNavigation } from '../pages/components/SideNavigation';
+import type { SuiteApplication } from './accessibility-project';
 import { accountEmail } from './testsigma-auth';
 import { escapeRegExp, noResults } from './common';
 
@@ -291,7 +292,7 @@ export async function verifyTestPlansPage(run: PlanRun, plan: PlanScenario) {
 	});
 
 	await step(page, 'Open Test Plans', async () => {
-		await hoverNavigation(page, 300);
+		await new SideNavigation(page).hover(300);
 		await page.getByRole('link', { name: 'Test Plans', exact: true }).click();
 		await expect(page).toHaveURL(new RegExp(`/td/${versionId}/plans$`), { timeout: 30000 });
 		const main = wizard(page);
@@ -1099,7 +1100,7 @@ export async function verifyPlanInList(run: PlanRun, plan: PlanScenario) {
 	const plans = await listPlans(page, versionId);
 
 	await step(page, 'Open Test Plans', async () => {
-		await hoverNavigation(page, 300);
+		await new SideNavigation(page).hover(300);
 		await page.getByRole('link', { name: 'Test Plans', exact: true }).click();
 		await expect(page).toHaveURL(new RegExp(`/td/${versionId}/plans$`), { timeout: 30000 });
 		await expect(main.getByText(`All (${plans.length})`, { exact: true })).toBeVisible({ timeout: 30000 });
