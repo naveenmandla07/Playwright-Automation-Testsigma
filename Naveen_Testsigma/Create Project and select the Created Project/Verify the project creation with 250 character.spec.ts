@@ -7,56 +7,47 @@
  *
  * Neither project is created, so the account stays clean.
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '../pages/fixtures';
+import type { ProjectSwitcher } from '../pages/projects/ProjectSwitcher';
 import { missingCredentials, missingCredentialsMessage, signInToTestsigma } from '../support/testsigma-auth';
 
+// Signs in and fills in the New Project form, all but its name.
+async function openNewProjectForm(projectSwitcher: ProjectSwitcher) {
+	await signInToTestsigma(projectSwitcher.page);
+	await projectSwitcher.open();
+	const form = await projectSwitcher.openNewProjectForm();
 
-async function openNewProjectForm(page: Page) {
-	await signInToTestsigma(page);
-
-	await page.mouse.move(20, 100);
-	const projectApplicationTab = page.locator('[role="button"]').filter({ has: page.locator('[data-testid="web"]') });
-	await expect(projectApplicationTab).toBeVisible();
-	await projectApplicationTab.click();
-	await page.getByRole('button', { name: 'New Project' }).click();
-
-	const projectNameField = page.getByRole('textbox', { name: 'Project name' });
-	const descriptionField = page.locator('textarea');
-	const applicationNameField = page.getByRole('textbox', { name: 'Web application' });
-	const applicationVersionField = page.getByRole('textbox', { name: 'Production' });
-	const classicEngine = page.getByRole('button').filter({ has: page.getByText('Classic', { exact: true }) });
-
-	await expect(projectNameField).toBeVisible();
-	await descriptionField.fill('Boundary validation test project.');
-	await applicationNameField.fill('Web App');
-	await applicationVersionField.fill('classic web');
-	await classicEngine.click();
-	return projectNameField;
+	await expect(form.nameField).toBeVisible();
+	await form.descriptionField.fill('Boundary validation test project.');
+	await form.applicationNameField.fill('Web App');
+	await form.applicationVersionField.fill('classic web');
+	await form.engine('Classic').click();
+	return form;
 }
 
 const lengthError = /project name.*250.*character|250.*character.*project name/i;
 
 // 250 characters is the maximum allowed length, so it is accepted; the project is not created to keep the account clean.
-test('[Naveen] Project name with 250 characters is accepted', async ({ page }) => {
+test('[Naveen] Project name with 250 characters is accepted', async ({ page, projectSwitcher }) => {
 	test.skip(missingCredentials, missingCredentialsMessage);
 
-	const projectNameField = await openNewProjectForm(page);
-	await projectNameField.fill('P'.repeat(250));
-	await projectNameField.blur();
+	const form = await openNewProjectForm(projectSwitcher);
+	await form.nameField.fill('P'.repeat(250));
+	await form.nameField.blur();
 
-	await expect(projectNameField).toHaveValue('P'.repeat(250));
+	await expect(form.nameField).toHaveValue('P'.repeat(250));
 	await expect(page.getByText(lengthError)).toBeHidden();
-	await expect(page.getByRole('button', { name: 'Create', exact: true })).toBeEnabled();
+	await expect(form.createButton).toBeEnabled();
 });
 
-test('[Naveen] Project name with 251 characters cannot be created', async ({ page }) => {
+test('[Naveen] Project name with 251 characters cannot be created', async ({ page, projectSwitcher }) => {
 	test.skip(missingCredentials, missingCredentialsMessage);
 
-	const projectNameField = await openNewProjectForm(page);
-	await projectNameField.fill('P'.repeat(251));
-	await projectNameField.blur();
+	const form = await openNewProjectForm(projectSwitcher);
+	await form.nameField.fill('P'.repeat(251));
+	await form.nameField.blur();
 
-	await expect(projectNameField).toHaveValue('P'.repeat(251));
+	await expect(form.nameField).toHaveValue('P'.repeat(251));
 	await expect(page.getByText(lengthError)).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Create', exact: true })).toBeDisabled();
+	await expect(form.createButton).toBeDisabled();
 });

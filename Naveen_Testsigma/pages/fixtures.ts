@@ -8,15 +8,18 @@
 import { test as base } from '@playwright/test';
 import { SideNavigation } from './components/SideNavigation';
 import { LoginPage } from './login/LoginPage';
+import { ProjectSwitcher } from './projects/ProjectSwitcher';
 
 type PageObjects = {
 	loginPage: LoginPage;
 	sideNavigation: SideNavigation;
+	projectSwitcher: ProjectSwitcher;
 };
 
 export const test = base.extend<PageObjects>({
 	loginPage: async ({ page }, use) => use(new LoginPage(page)),
 	sideNavigation: async ({ page }, use) => use(new SideNavigation(page)),
+	projectSwitcher: async ({ page }, use) => use(new ProjectSwitcher(page)),
 });
 
 export { expect } from '@playwright/test';

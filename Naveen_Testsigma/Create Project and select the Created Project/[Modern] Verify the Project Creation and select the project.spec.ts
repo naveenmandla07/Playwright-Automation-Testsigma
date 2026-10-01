@@ -11,8 +11,8 @@
  * The project is kept between runs. Runs in the serial chromium-projects project because it changes the
  * account's current project.
  */
-import { test } from '@playwright/test';
-import { checkSelectingProjects, createOrSwitchToProject, openProjectSwitcher, type NewProject } from '../support/create-project';
+import { test } from '../pages/fixtures';
+import type { NewProject } from '../pages/projects/NewProjectForm';
 import { missingCredentials, missingCredentialsMessage, signInToTestsigma } from '../support/testsigma-auth';
 
 const project: NewProject = {
@@ -23,14 +23,14 @@ const project: NewProject = {
 	description: 'Project created by the Testsigma Playwright automation suite using the Modern engine.',
 };
 
-test('[Modern] Verify Testsigma_New_Project_1_Modern creation and selection', async ({ page }) => {
+test('[Modern] Verify Testsigma_New_Project_1_Modern creation and selection', async ({ page, projectSwitcher }) => {
 	test.skip(missingCredentials, missingCredentialsMessage);
 
 	try {
 		await signInToTestsigma(page);
-		const switcher = await openProjectSwitcher(page);
-		await createOrSwitchToProject(page, switcher, project);
-		await checkSelectingProjects(page, switcher, project, { reloadBetween: true });
+		await projectSwitcher.openAndCheck();
+		await projectSwitcher.createOrSwitchTo(project);
+		await projectSwitcher.checkSelectingProjects(project, { reloadBetween: true });
 	} catch (error) {
 		throw new Error('TestSigma Modern project creation and selection scenario failed.', { cause: error });
 	}
