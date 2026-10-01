@@ -389,6 +389,8 @@ export function useSettingsTab(name: string): SettingsTabRun {
 	test.skip(missingCredentials, missingCredentialsMessage);
 
 	test.beforeAll(async ({ browser }) => {
+		// Signing in, opening Settings and letting the tab settle can take longer than a hook's own 30 seconds.
+		test.setTimeout(120000);
 		run.page = await openSignedInSettings(browser);
 		run.main = run.page.locator('main');
 		run.page.on('request', recordChange);

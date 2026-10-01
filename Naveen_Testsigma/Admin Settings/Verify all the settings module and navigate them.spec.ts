@@ -26,6 +26,8 @@ test.describe('Verify all the settings module and navigate them', () => {
 	let main: Locator;
 
 	test.beforeAll(async ({ browser }) => {
+		// Signing in and opening Settings can take longer than a hook's own 30 seconds.
+		test.setTimeout(120000);
 		page = await openSignedInSettings(browser);
 		main = page.locator('main');
 	});
