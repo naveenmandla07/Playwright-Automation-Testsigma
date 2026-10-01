@@ -1,8 +1,8 @@
 /**
- * Signing in to Testsigma, for every spec that needs a signed-in page. The Login Scenario specs test the sign-in
- * page itself, so they keep their own steps and only share the account's details from here.
+ * Signing in to Testsigma, for every spec that needs a signed-in page, through the Sign in page's page object.
  */
-import { expect, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { LoginPage } from '../pages/login/LoginPage';
 
 // The account the specs sign in as, from .env.
 export const accountEmail = process.env.TESTSIGMA_EMAIL ?? '';
@@ -24,23 +24,9 @@ export async function signInToTestsigma(page: Page) {
 	}
 	await blockNewsWidget(page);
 
-	await page.goto('./');
-	await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
-
-	const workEmail = page.getByPlaceholder('name@company.com');
-	const passwordField = page.getByPlaceholder('Enter Password');
-	const signInButton = page.getByRole('button', { name: 'Sign in' });
-
-	await expect(workEmail).toBeVisible();
-	await expect(passwordField).toBeVisible();
-	await expect(signInButton).toBeEnabled();
-
-	await workEmail.fill(accountEmail);
-	await passwordField.fill(accountPassword);
-	await expect(workEmail).toHaveValue(accountEmail);
-	await expect(passwordField).toHaveValue(accountPassword);
-	await signInButton.click();
-
-	await page.waitForURL(/\/ui\/v2\//, { timeout: 30000 });
-	await expect(page.getByRole('button', { name: 'Share Feedback' })).toBeVisible({ timeout: 30000 });
+	const loginPage = new LoginPage(page);
+	await loginPage.open();
+	await loginPage.expectReady();
+	await loginPage.signIn(accountEmail, accountPassword);
+	await loginPage.expectSignedIn();
 }

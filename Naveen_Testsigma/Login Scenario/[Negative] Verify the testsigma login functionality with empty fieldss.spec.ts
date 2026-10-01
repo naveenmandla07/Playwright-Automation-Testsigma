@@ -7,28 +7,21 @@
  *
  * Needs no account.
  */
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../pages/fixtures';
+import { BasePage } from '../pages/BasePage';
 
-test('[Negative] Verify the TestSigma login functionality with empty fields', async ({ page }) => {
+test('[Negative] Verify the TestSigma login functionality with empty fields', async ({ page, loginPage }) => {
 	try {
-		await page.goto('./');
-		await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+		await loginPage.open();
+		await loginPage.expectReady();
+		await expect(loginPage.emailField).toBeEmpty();
+		await expect(loginPage.passwordField).toBeEmpty();
 
-		const workEmail = page.getByPlaceholder('name@company.com');
-		const passwordField = page.getByPlaceholder('Enter Password');
-		const signInButton = page.getByRole('button', { name: 'Sign in' });
+		await loginPage.signInButton.click();
 
-		await expect(workEmail).toBeVisible();
-		await expect(passwordField).toBeVisible();
-		await expect(workEmail).toBeEmpty();
-		await expect(passwordField).toBeEmpty();
-		await expect(signInButton).toBeEnabled();
-
-		await signInButton.click();
-
-		await expect.poll(() => workEmail.evaluate((input) => (input as HTMLInputElement).validity.valueMissing)).toBe(true);
-		await expect.poll(() => passwordField.evaluate((input) => (input as HTMLInputElement).validity.valueMissing)).toBe(true);
-		await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+		await expect.poll(() => BasePage.isMissing(loginPage.emailField)).toBe(true);
+		await expect.poll(() => BasePage.isMissing(loginPage.passwordField)).toBe(true);
+		await expect(loginPage.heading).toBeVisible();
 		await expect(page).toHaveURL(/\/ui\/$/);
 	} catch (error) {
 		throw new Error('Negative empty-fields TestSigma login scenario failed.', { cause: error });

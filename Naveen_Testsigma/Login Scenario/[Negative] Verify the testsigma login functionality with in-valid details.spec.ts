@@ -7,32 +7,18 @@
  *
  * Needs no account.
  */
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../pages/fixtures';
 
-test('[Negative] Verify the TestSigma login functionality with invalid details', async ({ page }) => {
+test('[Negative] Verify the TestSigma login functionality with invalid details', async ({ page, loginPage }) => {
 	try {
-		await page.goto('./');
-		await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+		await loginPage.open();
+		await loginPage.expectReady();
 
-		const workEmail = page.getByPlaceholder('name@company.com');
-		const passwordField = page.getByPlaceholder('Enter Password');
-		const signInButton = page.getByRole('button', { name: 'Sign in' });
-		const invalidEmail = `invalid-user-${Date.now()}@example.com`;
-
-		await expect(workEmail).toBeVisible();
-		await expect(passwordField).toBeVisible();
-		await expect(signInButton).toBeEnabled();
-
-		await workEmail.fill(invalidEmail);
-		await passwordField.fill('InvalidPassword123!');
-		await expect(workEmail).toHaveValue(invalidEmail);
-		await expect(passwordField).toHaveValue('InvalidPassword123!');
-
-		await signInButton.click();
+		await loginPage.signIn(`invalid-user-${Date.now()}@example.com`, 'InvalidPassword123!');
 		await page.waitForTimeout(5000);
 
-		await expect(page.getByText('Please enter a valid email address')).toBeVisible();
-		await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+		await expect(loginPage.invalidDetailsError).toBeVisible();
+		await expect(loginPage.heading).toBeVisible();
 		await expect(page).toHaveURL(/\/ui\/$/);
 	} catch (error) {
 		throw new Error('Negative invalid-details TestSigma login scenario failed.', { cause: error });
