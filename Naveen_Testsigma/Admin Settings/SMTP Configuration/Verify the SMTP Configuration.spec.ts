@@ -9,34 +9,34 @@
  * How the account sends mail applies as soon as it is changed, so nothing on this tab is clicked.
  */
 import { expect, test } from '@playwright/test';
-import { expectTabElements, openTab, useSettingsTab } from '../../support/admin-settings';
+import { SmtpConfigurationTab } from '../../pages/settings/tabs/SmtpConfigurationTab';
+import { useSettingsTab } from '../../support/admin-settings';
 
 test.describe('Verify the SMTP Configuration', () => {
-	const run = useSettingsTab('SMTP Configuration');
+	const run = useSettingsTab(SmtpConfigurationTab);
 
 	test('Open the SMTP Configuration tab and check its elements', async () => {
-		await openTab(run.page, run.tab);
-		await expectTabElements(run.main, run.tab);
+		await run.tab.open();
+		await run.tab.expectElements();
 	});
 
 	test('Check the two ways of sending mail', async () => {
-		await expect(run.main.getByRole('img', { name: 'Testsigma logo' }).last()).toBeVisible();
-		await expect(run.main.getByText('Testsigma', { exact: true }).last()).toBeVisible();
-		await expect(run.main.getByText('Choose this option to receive emails on Testsigma\'s server', { exact: true })).toBeVisible();
-		await expect(run.main.getByTestId('alternate-email')).toBeVisible();
-		await expect(run.main.getByText('Own', { exact: true })).toBeVisible();
-		await expect(run.main.getByText('Configure SMTP to receive emails where you want them', { exact: true })).toBeVisible();
-		// SMTP is turned on or off by a switch beside the tab's title.
-		await expect(run.main.getByTestId('toggle-switch')).toBeVisible();
+		await expect(run.tab.testsigmaLogo).toBeVisible();
+		await expect(run.tab.text('Testsigma').last()).toBeVisible();
+		await expect(run.tab.text('Choose this option to receive emails on Testsigma\'s server')).toBeVisible();
+		await expect(run.tab.ownServerIcon).toBeVisible();
+		await expect(run.tab.text('Own')).toBeVisible();
+		await expect(run.tab.text('Configure SMTP to receive emails where you want them')).toBeVisible();
+		await expect(run.tab.smtpSwitch).toBeVisible();
 	});
 
 	test('Check which way is in use', async () => {
-		const ownServer = run.main.getByRole('textbox').first();
-		if (await run.main.getByRole('img', { name: 'SMTP disabled illustration' }).isVisible()) {
+		const ownServer = run.tab.ownServer;
+		if (await run.tab.smtpDisabled.isVisible()) {
 			// Mail goes through Testsigma's server, so there is nothing to configure.
 			test.info().annotations.push({ type: 'mail', description: 'sent by Testsigma' });
-			await expect(run.main.getByText('Mails will be sent from the Testsigma domain', { exact: true })).toBeVisible();
-			await expect(run.main.getByText(/^This is a convenient option for users who prefer to use Testsigma's built-in mail server/)).toBeVisible();
+			await expect(run.tab.text('Mails will be sent from the Testsigma domain')).toBeVisible();
+			await expect(run.tab.text(/^This is a convenient option for users who prefer to use Testsigma's built-in mail server/)).toBeVisible();
 			await expect(ownServer).toHaveCount(0);
 		} else {
 			test.info().annotations.push({ type: 'mail', description: 'sent by the account\'s own SMTP server' });

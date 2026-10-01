@@ -13,8 +13,10 @@
  * Only looks: the download links are checked for where they lead rather than followed. The tunnels belong to the
  * account, so they are read from the page.
  */
-import { expect, test, type Locator } from '@playwright/test';
-import { expectMenuOptions, expectTabElements, openTab, reopenTab, searchAttemptTime, searchFor, searchTime, useSettingsTab } from '../../support/admin-settings';
+import { expect, test } from '@playwright/test';
+import { searchAttemptTime, searchTime } from '../../pages/settings/SettingsPage';
+import { TunnelsTab } from '../../pages/settings/tabs/TunnelsTab';
+import { useSettingsTab } from '../../support/admin-settings';
 import { byName, noResults } from '../../support/common';
 
 const client = 'https://static-assets.testsigma.com/testsigma-tunnel-client/latest';
@@ -29,38 +31,16 @@ const downloads = [
 	{ system: 'RPM', amd64: new RegExp(`^${client}/testsigma-tunnel-[\\d.]+-1\\.x86_64\\.rpm$`), arm64: new RegExp(`^${client}/testsigma-tunnel-[\\d.]+-1\\.arm64\\.rpm$`) },
 ];
 
-// Each tunnel is a row of the grid, e.g. "prod prod-8203 TS0000248.local 1 P Production Test 2.0.6 Active".
-function tunnelRows(main: Locator) {
-	return main.getByRole('grid').getByRole('row');
-}
-
-async function tunnelNames(main: Locator) {
-	return Promise.all((await tunnelRows(main).all()).map(async (row) => (await row.innerText()).trim().split(/\s+/)[0]));
-}
-
-async function tunnelStates(main: Locator) {
-	return Promise.all((await tunnelRows(main).all()).map(async (row) => (await row.innerText()).trim().split(/\s+/).pop()));
-}
-
 test.describe('Verify the Tunnels', () => {
-	const run = useSettingsTab('Tunnels');
-
-	// The sort options stay open after one is chosen, so open them only when they are not showing.
-	async function sortBy(option: string) {
-		const choice = run.main.getByText(option, { exact: true });
-		if (!(await choice.isVisible())) {
-			await run.main.getByText('Sort by', { exact: true }).click();
-		}
-		await choice.click();
-	}
+	const run = useSettingsTab(TunnelsTab);
 
 	test('Open the Tunnels tab and check its elements', async () => {
-		await openTab(run.page, run.tab);
-		await expectTabElements(run.main, run.tab);
+		await run.tab.open();
+		await run.tab.expectElements();
 	});
 
 	test('Check every tunnel listed', async () => {
-		const rows = tunnelRows(run.main);
+		const rows = run.tab.rows;
 		const count = await rows.count();
 		test.info().annotations.push({ type: 'tunnels', description: `${count} tunnels` });
 		test.skip(count === 0, 'The account has no tunnels.');
@@ -73,60 +53,59 @@ test.describe('Verify the Tunnels', () => {
 	});
 
 	test('Search the tunnels', async () => {
-		const search = run.main.getByRole('textbox', { name: 'Search', exact: true });
-		const all = await tunnelNames(run.main);
+		const search = run.tab.search;
+		const all = await run.tab.tunnelNames();
 		test.skip(all.length === 0, 'The account has no tunnels.');
 		const [first] = all;
-		await searchFor(search, first, async () => {
-			await expect.poll(() => tunnelNames(run.main), { timeout: searchAttemptTime }).toEqual(all.filter((name) => name.toLowerCase().includes(first.toLowerCase())));
+		await run.tab.searchFor(search, first, async () => {
+			await expect.poll(() => run.tab.tunnelNames(), { timeout: searchAttemptTime }).toEqual(all.filter((name) => name.toLowerCase().includes(first.toLowerCase())));
 		});
 		await search.fill('zz-no-such-tunnel');
-		await expect(run.main.getByText(noResults, { exact: true })).toBeVisible({ timeout: searchTime });
-		await expect(run.main.getByRole('img', { name: 'Empty state illustration' })).toBeVisible();
+		await expect(run.tab.text(noResults)).toBeVisible({ timeout: searchTime });
+		await expect(run.tab.emptyState).toBeVisible();
 		await search.clear();
-		await expect.poll(() => tunnelNames(run.main), { timeout: searchTime }).toEqual(all);
+		await expect.poll(() => run.tab.tunnelNames(), { timeout: searchTime }).toEqual(all);
 	});
 
 	test('Show active, inactive and all tunnels', async () => {
-		const all = await tunnelNames(run.main);
-		await run.main.getByRole('button', { name: 'Active', exact: true }).click();
-		await expect.poll(async () => (await tunnelStates(run.main)).every((state) => state === 'Active'), { timeout: searchTime }).toBe(true);
-		await run.main.getByRole('button', { name: 'Inactive', exact: true }).click();
-		const noInactive = run.main.getByText('No Inactive tunnels Found', { exact: true });
+		const all = await run.tab.tunnelNames();
+		await run.tab.stateFilter('Active').click();
+		await expect.poll(async () => (await run.tab.tunnelStates()).every((state) => state === 'Active'), { timeout: searchTime }).toBe(true);
+		await run.tab.stateFilter('Inactive').click();
+		const noInactive = run.tab.noInactive;
 		// Wait for the list to change: either only inactive tunnels, or none at all.
 		await expect.poll(async () => (await noInactive.isVisible())
-			|| (await tunnelStates(run.main)).every((state) => state === 'Inactive'), { message: 'only inactive tunnels', timeout: searchTime }).toBe(true);
+			|| (await run.tab.tunnelStates()).every((state) => state === 'Inactive'), { message: 'only inactive tunnels', timeout: searchTime }).toBe(true);
 		if (await noInactive.isVisible()) {
-			await expect(run.main.getByRole('img', { name: 'Empty state illustration' })).toBeVisible();
-			await expect(tunnelRows(run.main)).toHaveCount(0);
+			await expect(run.tab.emptyState).toBeVisible();
+			await expect(run.tab.rows).toHaveCount(0);
 		}
-		await run.main.getByRole('button', { name: 'All', exact: true }).click();
-		await expect.poll(() => tunnelNames(run.main), { timeout: searchTime }).toEqual(all);
+		await run.tab.stateFilter('All').click();
+		await expect.poll(() => run.tab.tunnelNames(), { timeout: searchTime }).toEqual(all);
 	});
 
 	test('Sort the tunnels', async () => {
-		await expectMenuOptions(run.main, () => run.main.getByText('Sort by', { exact: true }).click(), ['Name', 'A to Z', 'Z to A']);
-		const names = await tunnelNames(run.main);
-		await sortBy('Z to A');
-		await expect.poll(() => tunnelNames(run.main)).toEqual([...names].sort(byName).reverse());
-		await sortBy('A to Z');
-		await expect.poll(() => tunnelNames(run.main)).toEqual([...names].sort(byName));
-		await reopenTab(run.page, run.tab);
+		await run.tab.expectMenuOptions(() => run.tab.sortByMenu.click(), ['Name', 'A to Z', 'Z to A']);
+		const names = await run.tab.tunnelNames();
+		await run.tab.sortBy('Z to A');
+		await expect.poll(() => run.tab.tunnelNames()).toEqual([...names].sort(byName).reverse());
+		await run.tab.sortBy('A to Z');
+		await expect.poll(() => run.tab.tunnelNames()).toEqual([...names].sort(byName));
+		await run.tab.reopen();
 	});
 
 	test('"What is a Tunnel?" explains itself', async () => {
-		await run.main.getByRole('button', { name: 'What is a Tunnel?' }).click();
-		await expect(run.page.getByRole('tooltip', { name: /What is a Tunnel\?/ }).first()).toBeVisible();
+		await run.tab.whatIsATunnel.click();
+		await expect(run.tab.whatIsATunnelTooltip).toBeVisible();
 	});
 
 	test('"Download Tunnel" offers the client for every system', async () => {
-		await reopenTab(run.page, run.tab);
-		await run.main.getByRole('button', { name: 'Download Tunnel' }).click();
-		const links = run.page.getByRole('link', { name: /^(amd64|arm64)$/ });
-		await expect(links.first()).toBeVisible();
-		const offered = await links.evaluateAll((anchors) => anchors.map((anchor) => `${anchor.textContent?.trim()} ${(anchor as HTMLAnchorElement).href}`));
+		await run.tab.reopen();
+		await run.tab.downloadButton.click();
+		await expect(run.tab.downloadLinks.first()).toBeVisible();
+		const offered = await run.tab.offeredDownloads();
 		for (const download of downloads) {
-			await expect.soft(run.page.getByText(download.system, { exact: true }).last(), download.system).toBeVisible();
+			await expect.soft(run.tab.downloadSystem(download.system), download.system).toBeVisible();
 			for (const processor of ['amd64', 'arm64'] as const) {
 				const expected = download[processor];
 				const found = offered.some((link) => {
@@ -138,15 +117,15 @@ test.describe('Verify the Tunnels', () => {
 		}
 		// Five systems, each for both processor types.
 		expect(offered).toHaveLength(downloads.length * 2);
-		await expect(run.page.getByText('Docker', { exact: true }).last()).toBeVisible();
-		await expect(run.page.getByRole('link', { name: '.docs' })).toHaveAttribute('href', 'https://testsigma.com/docs/testsigma-tunnel/setup/#setup-and-installation');
-		await run.main.getByRole('heading', { name: 'Tunnels' }).click();
+		await expect(run.tab.downloadSystem('Docker')).toBeVisible();
+		await expect(run.tab.docsLink).toHaveAttribute('href', 'https://testsigma.com/docs/testsigma-tunnel/setup/#setup-and-installation');
+		await run.tab.heading.click();
 	});
 
 	test('Refresh the list', async () => {
-		await reopenTab(run.page, run.tab);
-		const before = await tunnelNames(run.main);
-		await run.main.getByRole('button', { name: 'Refresh' }).click();
-		await expect.poll(() => tunnelNames(run.main), { timeout: searchTime }).toEqual(expect.arrayContaining(before));
+		await run.tab.reopen();
+		const before = await run.tab.tunnelNames();
+		await run.tab.refreshButton.click();
+		await expect.poll(() => run.tab.tunnelNames(), { timeout: searchTime }).toEqual(expect.arrayContaining(before));
 	});
 });

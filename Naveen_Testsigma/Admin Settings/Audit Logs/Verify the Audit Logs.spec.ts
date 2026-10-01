@@ -12,8 +12,9 @@
  * Only looks: "Export" is checked but never clicked, since it would start an export of the log. The log belongs
  * to the account, so entries are checked for what every entry shows.
  */
-import { expect, test, type Locator } from '@playwright/test';
-import { expectTabElements, openTab, reopenTab, useSettingsTab } from '../../support/admin-settings';
+import { expect, test } from '@playwright/test';
+import { AuditLogsTab } from '../../pages/settings/tabs/AuditLogsTab';
+import { useSettingsTab } from '../../support/admin-settings';
 import { projectName } from '../../support/accessibility-project';
 import { accountEmail } from '../../support/testsigma-auth';
 
@@ -23,48 +24,21 @@ const filterSections = ['Event Type', 'Action', 'Date Range', 'User', 'Project']
 // When an entry happened, e.g. "Sep 30, 2026, 03:15 PM".
 const when = /^\w{3} \d{1,2}, \d{4}, \d{1,2}:\d{2} (AM|PM)$/;
 
-// Each entry is a row inside the grid's own wrapping row.
-function entryRows(main: Locator) {
-	return main.getByRole('grid').getByRole('row').getByRole('row');
-}
-
-// An entry's lines: when, event type, action, project, then who did it and what happened.
-async function entryLines(row: Locator) {
-	return (await row.innerText()).split('\n').map((line) => line.trim()).filter(Boolean);
-}
-
 test.describe('Verify the Audit Logs', () => {
-	const run = useSettingsTab('Audit Logs');
-
-	function filters() {
-		return run.page.locator('div')
-			.filter({ has: run.page.getByRole('heading', { name: 'Filters' }) })
-			.filter({ has: run.page.getByRole('button', { name: 'Apply' }) })
-			.last();
-	}
-
-	async function openFilters() {
-		await run.main.getByRole('button', { name: 'Filters', exact: true }).click();
-		await expect(filters().getByRole('heading', { name: 'Filters' })).toBeVisible();
-	}
-
-	// A filter's choices are folded away until its name is clicked.
-	async function openSection(name: string) {
-		await filters().getByText(name, { exact: true }).click();
-	}
+	const run = useSettingsTab(AuditLogsTab);
 
 	test('Open the Audit Logs tab and check its elements', async () => {
-		await openTab(run.page, run.tab);
-		await expectTabElements(run.main, run.tab);
+		await run.tab.open();
+		await run.tab.expectElements();
 	});
 
 	test('Check every entry listed', async () => {
-		const rows = entryRows(run.main);
+		const rows = run.tab.rows;
 		await expect(rows.first()).toBeVisible();
 		const count = await rows.count();
 		test.info().annotations.push({ type: 'entries', description: `${count} entries shown` });
 		for (let index = 0; index < count; index += 1) {
-			const lines = await entryLines(rows.nth(index));
+			const lines = await run.tab.entryLines(rows.nth(index));
 			const label = `entry ${index + 1}`;
 			expect.soft(lines[0], `${label} time`).toMatch(when);
 			expect.soft(eventTypes, `${label} event type`).toContain(lines[1]);
@@ -76,9 +50,9 @@ test.describe('Verify the Audit Logs', () => {
 	});
 
 	test('Open an entry\'s details', async () => {
-		const lines = await entryLines(entryRows(run.main).first());
-		await entryRows(run.main).first().getByText('View Details').click();
-		const details = run.page.getByRole('dialog');
+		const lines = await run.tab.entryLines(run.tab.rows.first());
+		await run.tab.rows.first().getByText('View Details').click();
+		const details = run.tab.details;
 		await expect(details.getByText('Detailed View', { exact: true })).toBeVisible();
 		// The details repeat who did it and what happened.
 		const [, , , , , who] = lines;
@@ -89,59 +63,59 @@ test.describe('Verify the Audit Logs', () => {
 	});
 
 	test('Open the filters and check each of them', async () => {
-		await openFilters();
-		const panel = filters();
+		await run.tab.openFilters();
+		const panel = run.tab.filters;
 		for (const section of filterSections) {
 			await expect.soft(panel.getByText(section, { exact: true }), section).toBeVisible();
 		}
 		for (const name of ['Clear all', 'Cancel', 'Apply']) {
 			await expect.soft(panel.getByRole('button', { name, exact: true }), name).toBeVisible();
 		}
-		await openSection('Event Type');
+		await run.tab.openSection('Event Type');
 		for (const type of eventTypes) {
 			await expect.soft(panel.getByRole('checkbox', { name: type, exact: true }), `event type ${type}`).not.toBeChecked();
 		}
-		await openSection('Action');
+		await run.tab.openSection('Action');
 		for (const action of actions) {
 			await expect.soft(panel.getByRole('checkbox', { name: action, exact: true }), `action ${action}`).not.toBeChecked();
 		}
-		await openSection('Date Range');
+		await run.tab.openSection('Date Range');
 		await expect.soft(panel.getByText('From Date & Time', { exact: true })).toBeVisible();
 		await expect.soft(panel.getByText('To Date & Time', { exact: true })).toBeVisible();
 		await expect.soft(panel.getByRole('textbox', { name: 'Select date' })).toHaveCount(2);
-		await openSection('User');
+		await run.tab.openSection('User');
 		await expect.soft(panel.getByRole('textbox', { name: 'Search for a user' })).toBeVisible();
 		// The signed-in account is among the users to choose from.
 		await expect.soft(panel.getByRole('checkbox', { name: accountEmail, exact: true })).toBeAttached();
-		await openSection('Project');
+		await run.tab.openSection('Project');
 		// Searching the projects finds the one the other specs work in.
 		await panel.getByRole('textbox', { name: 'Search for a project' }).fill(projectName);
 		await expect.soft(panel.getByRole('checkbox', { name: projectName, exact: true })).toBeAttached();
 		await panel.getByRole('button', { name: 'Cancel', exact: true }).click();
-		await expect(run.page.getByRole('heading', { name: 'Filters' })).toHaveCount(0);
+		await expect(run.tab.filtersHeading).toHaveCount(0);
 		// Cancelling applies nothing.
-		await expect(run.main.getByRole('button', { name: 'Clear All', exact: true })).toHaveCount(0);
+		await expect(run.tab.clearAllButton).toHaveCount(0);
 	});
 
 	test('Filter the log to sign-ins and clear the filter', async () => {
-		await openFilters();
-		await openSection('Event Type');
-		await filters().getByText('Authentication', { exact: true }).click();
-		await openSection('Action');
-		await filters().getByText('Login', { exact: true }).click();
-		await filters().getByRole('button', { name: 'Apply', exact: true }).click();
-		// Each filter in use shows how many of its choices are picked, the count in an element of its own.
-		await expect(run.main.getByText(/^Event Type\s*\(1\)$/)).toBeVisible();
-		await expect(run.main.getByText(/^Action\s*\(1\)$/)).toBeVisible();
+		await run.tab.openFilters();
+		await run.tab.openSection('Event Type');
+		await run.tab.filters.getByText('Authentication', { exact: true }).click();
+		await run.tab.openSection('Action');
+		await run.tab.filters.getByText('Login', { exact: true }).click();
+		await run.tab.filters.getByRole('button', { name: 'Apply', exact: true }).click();
+		// Each filter in use shows how many of its choices are picked.
+		await expect(run.tab.filterInUse('Event Type', 1)).toBeVisible();
+		await expect(run.tab.filterInUse('Action', 1)).toBeVisible();
 		// Signing in for this check logged an entry, so there is always at least one.
-		const rows = entryRows(run.main);
+		const rows = run.tab.rows;
 		await expect(rows.first()).toBeVisible();
 		for (let index = 0; index < await rows.count(); index += 1) {
-			const lines = await entryLines(rows.nth(index));
+			const lines = await run.tab.entryLines(rows.nth(index));
 			expect.soft(lines.slice(1, 3), `entry ${index + 1}`).toEqual(['Authentication', 'Login']);
 		}
-		await run.main.getByRole('button', { name: 'Clear All', exact: true }).click();
-		await expect(run.main.getByText(/^Event Type\s*\(1\)$/)).toHaveCount(0);
-		await reopenTab(run.page, run.tab);
+		await run.tab.clearAllButton.click();
+		await expect(run.tab.filterInUse('Event Type', 1)).toHaveCount(0);
+		await run.tab.reopen();
 	});
 });

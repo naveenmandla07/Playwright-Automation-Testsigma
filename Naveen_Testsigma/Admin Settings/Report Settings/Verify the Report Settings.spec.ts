@@ -8,22 +8,23 @@
  * Customising reports applies to the whole account as soon as it is switched, so the switch is only looked at.
  */
 import { expect, test } from '@playwright/test';
-import { expectTabElements, openTab, useSettingsTab } from '../../support/admin-settings';
+import { ReportSettingsTab } from '../../pages/settings/tabs/ReportSettingsTab';
+import { useSettingsTab } from '../../support/admin-settings';
 
 test.describe('Verify the Report Settings', () => {
-	const run = useSettingsTab('Report Settings');
+	const run = useSettingsTab(ReportSettingsTab);
 
 	test('Open the Report Settings tab and check its elements', async () => {
-		await openTab(run.page, run.tab);
-		await expectTabElements(run.main, run.tab);
+		await run.tab.open();
+		await run.tab.expectElements();
 	});
 
 	test('Check the Customise Reports preference', async () => {
-		await expect(run.main.getByText('Customise Reports', { exact: true })).toBeVisible();
-		await expect(run.main.getByRole('paragraph').filter({ hasText: /^Export customised reports/ }))
+		await expect(run.tab.text('Customise Reports')).toBeVisible();
+		await expect(run.tab.description)
 			.toHaveText('Export customised reports for your company by adding a logo, including copyright information, and sharing them with your brand identity.');
 		// The preference is turned on or off by its switch, drawn over the checkbox that names it.
-		const customise = run.main.getByRole('checkbox', { name: 'Customise Reports', exact: true });
+		const customise = run.tab.customise;
 		await expect(customise).toBeAttached();
 		await expect(customise).toBeEnabled();
 		await expect(customise.locator('..').getByTestId('toggle-switch')).toBeVisible();

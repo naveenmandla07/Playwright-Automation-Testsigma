@@ -12,29 +12,25 @@
  * Nothing is imported: no file is chosen and the form is closed. The imports belong to the account, so they are
  * read from the page and checked for what every import shows.
  */
-import { expect, test, type Locator } from '@playwright/test';
-import { expectTabElements, openTab, reopenTab, useSettingsTab } from '../../support/admin-settings';
+import { expect, test } from '@playwright/test';
+import { ImportsTab } from '../../pages/settings/tabs/ImportsTab';
+import { useSettingsTab } from '../../support/admin-settings';
 
 const artefacts = ['Variables', 'Step Groups', 'Test Cases', 'Environments', 'Elements', 'Test Suites', 'Test Plans', 'Test Data Profile', 'Uploads'];
 const postmanColumns = ['Project', 'Application', 'Version', 'Initiated by', 'Action', 'Status'];
 // Who started something, and when, e.g. "Production Test Aug 14, 2026, 08:03 AM".
 const byAndWhen = /\S.*\w{3} \d{1,2}, \d{4}, \d{1,2}:\d{2} (AM|PM)$/;
 
-// Each import is a row inside the grid's own wrapping row.
-function importRows(main: Locator) {
-	return main.getByRole('grid').getByRole('row').getByRole('row');
-}
-
 test.describe('Verify the Imports', () => {
-	const run = useSettingsTab('Imports');
+	const run = useSettingsTab(ImportsTab);
 
 	test('Open the Imports tab and check its elements', async () => {
-		await openTab(run.page, run.tab);
-		await expectTabElements(run.main, run.tab);
+		await run.tab.open();
+		await run.tab.expectElements();
 	});
 
 	test('Check every import listed', async () => {
-		const rows = importRows(run.main);
+		const rows = run.tab.rows;
 		await expect(rows.first()).toBeVisible();
 		const count = await rows.count();
 		test.info().annotations.push({ type: 'imports', description: `${count} imports` });
@@ -51,9 +47,9 @@ test.describe('Verify the Imports', () => {
 	});
 
 	test('Open an import\'s summary', async () => {
-		const cells = importRows(run.main).first().getByRole('gridcell');
+		const cells = run.tab.rows.first().getByRole('gridcell');
 		await cells.first().click();
-		const summary = run.page.getByRole('dialog');
+		const summary = run.tab.summary;
 		await expect(summary.getByRole('heading', { name: 'Import Summary' })).toBeVisible();
 		for (const text of ['Imported At', 'Initiated by', 'From', 'To', 'Imported artefact']) {
 			await expect.soft(summary.getByText(text, { exact: true }).first(), text).toBeVisible();
@@ -68,11 +64,11 @@ test.describe('Verify the Imports', () => {
 	});
 
 	test('Switch to Postman imports', async () => {
-		await run.main.getByText('Postman imports', { exact: true }).click();
+		await run.tab.postmanImports.click();
 		for (const column of postmanColumns) {
-			await expect.soft(run.main.getByText(column, { exact: true }).last(), `column ${column}`).toBeVisible();
+			await expect.soft(run.tab.text(column).last(), `column ${column}`).toBeVisible();
 		}
-		const rows = importRows(run.main);
+		const rows = run.tab.rows;
 		const count = await rows.count();
 		test.info().annotations.push({ type: 'Postman imports', description: `${count} imports` });
 		if (count === 0) {
@@ -86,12 +82,12 @@ test.describe('Verify the Imports', () => {
 			await expect.soft(cells.nth(4), `action of Postman import ${index + 1}`).toHaveText(/\.json$|\.zip$/);
 			await expect.soft(cells.nth(5), `status of Postman import ${index + 1}`).toHaveText(/\S/);
 		}
-		await reopenTab(run.page, run.tab);
+		await run.tab.reopen();
 	});
 
 	test('Open the Import form and close it', async () => {
-		await run.main.getByRole('button', { name: 'Import', exact: true }).click();
-		const form = run.page.getByRole('dialog');
+		await run.tab.importButton.click();
+		const form = run.tab.importForm;
 		await expect(form.getByText('Import Postman Collection', { exact: true })).toBeVisible();
 		for (const text of ['Select File for Import', 'Import Location']) {
 			await expect.soft(form.getByText(text, { exact: true }), text).toBeVisible();

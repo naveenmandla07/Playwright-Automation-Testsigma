@@ -9,31 +9,32 @@
  * Whether support may sign in is the account's own choice, so the button is checked but never clicked.
  */
 import { expect, test } from '@playwright/test';
-import { expectTabElements, openTab, useSettingsTab } from '../../support/admin-settings';
+import { ManageAccessTab } from '../../pages/settings/tabs/ManageAccessTab';
+import { useSettingsTab } from '../../support/admin-settings';
 
 test.describe('Verify the Manage Access', () => {
-	const run = useSettingsTab('Manage Access');
+	const run = useSettingsTab(ManageAccessTab);
 
 	test('Open the Manage Access tab and check its elements', async () => {
-		await openTab(run.page, run.tab);
-		await expectTabElements(run.main, run.tab);
-		await expect(run.main.getByRole('paragraph').filter({ hasText: /^To assist with support issues/ }))
+		await run.tab.open();
+		await run.tab.expectElements();
+		await expect(run.tab.introduction)
 			.toHaveText('To assist with support issues, our team may require access to your account. You can manage access permissions in this section.');
 	});
 
 	test('Check whether support may sign in to the account', async () => {
-		await expect(run.main.getByText('Current Status', { exact: true })).toBeVisible();
-		const status = run.main.getByText(/^Access (Denied|Allowed|Granted)$/);
+		await expect(run.tab.text('Current Status')).toBeVisible();
+		const status = run.tab.status;
 		await expect(status).toBeVisible();
 		const denied = (await status.innerText()).trim() === 'Access Denied';
 		test.info().annotations.push({ type: 'support access', description: (await status.innerText()).trim() });
 		// The button changes the status the other way.
 		if (denied) {
-			await expect(run.main.getByRole('button', { name: 'Allow Access', exact: true })).toBeEnabled();
-			await expect(run.main.getByRole('button', { name: /^(Revoke|Deny) Access$/ })).toHaveCount(0);
+			await expect(run.tab.allowButton).toBeEnabled();
+			await expect(run.tab.revokeButton).toHaveCount(0);
 		} else {
-			await expect(run.main.getByRole('button', { name: /^(Revoke|Deny) Access$/ })).toBeEnabled();
-			await expect(run.main.getByRole('button', { name: 'Allow Access', exact: true })).toHaveCount(0);
+			await expect(run.tab.revokeButton).toBeEnabled();
+			await expect(run.tab.allowButton).toHaveCount(0);
 		}
 	});
 });

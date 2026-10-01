@@ -11,7 +11,9 @@
  * Nothing is saved: "Create" and "Validate API key" are checked but never clicked, and every form is cancelled.
  */
 import { expect, test } from '@playwright/test';
-import { expectTabElements, genAiFeatures, openTab, useSettingsTab } from '../../support/admin-settings';
+import { genAiFeatures } from '../../pages/settings/settingsTabs';
+import { GenAiKeysTab } from '../../pages/settings/tabs/GenAiKeysTab';
+import { useSettingsTab } from '../../support/admin-settings';
 
 type Provider = { name: string; fields: string[]; texts?: (string | RegExp)[]; buttons?: string[] };
 
@@ -32,44 +34,17 @@ const providers: Provider[] = [
 ];
 
 test.describe('Verify the Gen AI Keys', () => {
-	const run = useSettingsTab('Gen AI Keys');
-
-	function keyForm() {
-		return run.page.getByRole('dialog');
-	}
-
-	async function openKeyForm() {
-		await run.main.getByText('Create new key', { exact: true }).click();
-		await expect(keyForm().getByRole('textbox', { name: 'Key Name' })).toBeVisible();
-	}
-
-	async function chooseProvider(name: string) {
-		await keyForm().getByText('Select provider', { exact: true }).click();
-		await keyForm().getByText(name, { exact: true }).click();
-		await expect(keyForm().getByRole('img', { name: `${name} logo` })).toBeVisible();
-		await expect(keyForm().getByText('Select provider', { exact: true })).toHaveCount(0);
-	}
-
-	async function cancelForm() {
-		await keyForm().getByRole('button', { name: 'Cancel', exact: true }).click();
-		await expect(keyForm()).toHaveCount(0);
-	}
-
-	// "Validate API key" is text rather than a button, greyed out and ignoring clicks while it cannot be used.
-	function validateKey() {
-		return keyForm().getByText('Validate API key', { exact: true });
-	}
+	const run = useSettingsTab(GenAiKeysTab);
 
 	test('Open the Gen AI Keys tab and check its elements', async () => {
-		await openTab(run.page, run.tab);
-		await expectTabElements(run.main, run.tab);
-		await expect(run.main.getByRole('link').filter({ has: run.page.locator('svg') }).first()).toHaveAttribute('href', 'https://testsigma.com/docs/atto/generative-ai/byok/intro/');
+		await run.tab.open();
+		await run.tab.expectElements();
+		await expect(run.tab.docsLink).toHaveAttribute('href', 'https://testsigma.com/docs/atto/generative-ai/byok/intro/');
 	});
 
 	test('Each feature uses Testsigma\'s own models until the account adds a key', async () => {
 		for (const feature of genAiFeatures) {
-			const row = run.main.getByText(feature, { exact: true }).locator('xpath=..');
-			const [key, model] = [row.locator('[data-isopen]').nth(0), row.locator('[data-isopen]').nth(1)];
+			const { key, model } = run.tab.featureChoices(feature);
 			await expect.soft(key, `key of ${feature}`).toHaveText('Testsigma Default');
 			await expect.soft(model, `model of ${feature}`).toHaveText('Select Model');
 			// With no keys of its own, the account cannot choose a feature's key or model.
@@ -79,79 +54,78 @@ test.describe('Verify the Gen AI Keys', () => {
 	});
 
 	test('Open the Create new key form and check its fields', async () => {
-		await openKeyForm();
-		const form = keyForm();
-		await expect(form.getByText('Create new key', { exact: true })).toBeVisible();
-		await expect(form.getByRole('textbox', { name: 'Key Name' })).toBeEmpty();
-		await expect(form.getByRole('textbox', { name: 'Key Name' })).toHaveAttribute('placeholder', 'Enter Key Name');
+		const tab = run.tab;
+		await tab.openKeyForm();
+		await expect(tab.formText('Create new key')).toBeVisible();
+		await expect(tab.keyName).toBeEmpty();
+		await expect(tab.keyName).toHaveAttribute('placeholder', 'Enter Key Name');
 		// "(Optional)" sits in an element of its own beside the label.
-		await expect(form.getByText(/^Description\s*\(Optional\)$/)).toBeVisible();
-		await expect(form.getByRole('textbox', { name: 'Description' })).toBeEmpty();
-		await expect(form.getByText('AI Provider Details', { exact: true })).toBeVisible();
-		await expect(form.getByText('Select provider', { exact: true })).toBeVisible();
-		await expect(validateKey()).toHaveClass(/pointer-events-none/);
-		await expect(form.getByRole('button', { name: 'Create', exact: true })).toBeDisabled();
-		await expect(form.getByRole('button', { name: 'Cancel', exact: true })).toBeEnabled();
-		await cancelForm();
+		await expect(tab.formText(/^Description\s*\(Optional\)$/)).toBeVisible();
+		await expect(tab.description).toBeEmpty();
+		await expect(tab.formText('AI Provider Details')).toBeVisible();
+		await expect(tab.providerMenu).toBeVisible();
+		await expect(tab.validateKey).toHaveClass(/pointer-events-none/);
+		await expect(tab.createButton).toBeDisabled();
+		await expect(tab.formButton('Cancel')).toBeEnabled();
+		await tab.cancelForm();
 	});
 
 	test('The AI providers dropdown lists every provider', async () => {
-		await openKeyForm();
-		await keyForm().getByText('Select provider', { exact: true }).click();
+		const tab = run.tab;
+		await tab.openKeyForm();
+		await tab.providerMenu.click();
 		for (const provider of providers) {
-			await expect.soft(keyForm().getByRole('img', { name: `${provider.name} logo` }), provider.name).toBeVisible();
-			await expect.soft(keyForm().getByText(provider.name, { exact: true }), provider.name).toBeVisible();
+			await expect.soft(tab.providerLogo(provider.name), provider.name).toBeVisible();
+			await expect.soft(tab.formText(provider.name), provider.name).toBeVisible();
 		}
-		await cancelForm();
+		await tab.cancelForm();
 	});
 
 	for (const provider of providers) {
 		test(`Choosing ${provider.name} asks for its own details`, async () => {
-			await openKeyForm();
-			await chooseProvider(provider.name);
-			const form = keyForm();
+			const tab = run.tab;
+			await tab.openKeyForm();
+			await tab.chooseProvider(provider.name);
 			for (const field of provider.fields) {
-				await expect.soft(form.getByRole('textbox', { name: field, exact: true }), `field ${field}`).toBeEmpty();
-				await expect.soft(form.getByRole('textbox', { name: field, exact: true }), `field ${field}`).toBeEditable();
+				await expect.soft(tab.field(field), `field ${field}`).toBeEmpty();
+				await expect.soft(tab.field(field), `field ${field}`).toBeEditable();
 			}
 			for (const text of provider.texts ?? []) {
-				const shown = typeof text === 'string' ? form.getByText(text, { exact: true }) : form.getByText(text);
-				await expect.soft(shown.first(), `text ${text}`).toBeVisible();
+				await expect.soft(tab.formText(text).first(), `text ${text}`).toBeVisible();
 			}
 			for (const name of provider.buttons ?? []) {
-				await expect.soft(form.getByRole('button', { name, exact: true }), `button ${name}`).toBeVisible();
+				await expect.soft(tab.formButton(name), `button ${name}`).toBeVisible();
 			}
-			await expect(form.getByRole('button', { name: 'Create', exact: true })).toBeDisabled();
-			await cancelForm();
+			await expect(tab.createButton).toBeDisabled();
+			await tab.cancelForm();
 		});
 	}
 
 	test('Azure OpenAI can have more than one model deployment', async () => {
-		await openKeyForm();
-		await chooseProvider('Azure OpenAI');
-		const form = keyForm();
-		await expect(form.getByText('Model 2', { exact: true })).toHaveCount(0);
-		await form.getByRole('button', { name: 'Add Model Deployment' }).click();
-		await expect(form.getByText('Model 2', { exact: true })).toBeVisible();
+		const tab = run.tab;
+		await tab.openKeyForm();
+		await tab.chooseProvider('Azure OpenAI');
+		await expect(tab.formText('Model 2')).toHaveCount(0);
+		await tab.form.getByRole('button', { name: 'Add Model Deployment' }).click();
+		await expect(tab.formText('Model 2')).toBeVisible();
 		// Each deployment has its own name and version.
-		await expect(form.getByRole('textbox', { name: 'Name', exact: true })).toHaveCount(2);
-		await expect(form.getByRole('textbox', { name: 'Version', exact: true })).toHaveCount(2);
-		await cancelForm();
+		await expect(tab.field('Name')).toHaveCount(2);
+		await expect(tab.field('Version')).toHaveCount(2);
+		await tab.cancelForm();
 	});
 
 	test('A key can be created once it has a name, a provider and an API key', async () => {
-		await openKeyForm();
-		const form = keyForm();
-		const create = form.getByRole('button', { name: 'Create', exact: true });
-		await form.getByRole('textbox', { name: 'Key Name' }).fill('Playwright key that is never created');
-		await expect(create).toBeDisabled();
-		await chooseProvider('Gemini AI');
-		await expect(create).toBeDisabled();
-		await form.getByRole('textbox', { name: 'API Key', exact: true }).fill('not-a-real-api-key');
-		await expect(create).toBeEnabled();
+		const tab = run.tab;
+		await tab.openKeyForm();
+		await tab.keyName.fill('Playwright key that is never created');
+		await expect(tab.createButton).toBeDisabled();
+		await tab.chooseProvider('Gemini AI');
+		await expect(tab.createButton).toBeDisabled();
+		await tab.field('API Key').fill('not-a-real-api-key');
+		await expect(tab.createButton).toBeEnabled();
 		// Taking the name away again stops it being created.
-		await form.getByRole('textbox', { name: 'Key Name' }).clear();
-		await expect(create).toBeDisabled();
-		await cancelForm();
+		await tab.keyName.clear();
+		await expect(tab.createButton).toBeDisabled();
+		await tab.cancelForm();
 	});
 });

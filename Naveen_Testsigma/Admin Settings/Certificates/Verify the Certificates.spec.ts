@@ -10,40 +10,22 @@
  * Nothing is added: no file is chosen, "Add certificate" in the form is never clicked, and the form is cancelled.
  */
 import { expect, test } from '@playwright/test';
-import { expectTabElements, openTab, useSettingsTab } from '../../support/admin-settings';
+import { CertificatesTab } from '../../pages/settings/tabs/CertificatesTab';
+import { useSettingsTab } from '../../support/admin-settings';
 
 test.describe('Verify the Certificates', () => {
-	const run = useSettingsTab('Certificates');
-
-	function certificateForm() {
-		return run.page.getByRole('dialog');
-	}
-
-	async function openForm() {
-		await run.main.getByRole('button', { name: 'Add certificate' }).click();
-		await expect(certificateForm().getByText('Add client certificate', { exact: true })).toBeVisible();
-	}
-
-	async function cancelForm() {
-		await certificateForm().getByRole('button', { name: 'Cancel', exact: true }).click();
-		await expect(certificateForm()).toHaveCount(0);
-	}
-
-	// The file types a file field accepts, e.g. ".crt,.pem,.cer".
-	async function acceptedFiles() {
-		return certificateForm().locator('input[type=file]').evaluateAll((inputs) => inputs.map((input) => input.getAttribute('accept') ?? ''));
-	}
+	const run = useSettingsTab(CertificatesTab);
 
 	test('Open the Certificates tab and check its elements', async () => {
-		await openTab(run.page, run.tab);
-		await expectTabElements(run.main, run.tab);
-		const none = run.main.getByText('No client certificates registered for this project yet.', { exact: true });
-		test.info().annotations.push({ type: 'certificates', description: (await none.isVisible()) ? 'none' : `${await run.main.getByRole('grid').getByRole('row').count()} rows` });
+		await run.tab.open();
+		await run.tab.expectElements();
+		const none = run.tab.noCertificates;
+		test.info().annotations.push({ type: 'certificates', description: (await none.isVisible()) ? 'none' : `${await run.tab.table.getByRole('row').count()} rows` });
 	});
 
 	test('Open the Add certificate form and check its fields', async () => {
-		await openForm();
-		const form = certificateForm();
+		await run.tab.openForm();
+		const form = run.tab.form;
 		const host = form.getByRole('textbox', { name: 'Host', exact: true });
 		await expect(host).toBeEmpty();
 		// The placeholder reads as it is shown, "getestsigma.com".
@@ -67,14 +49,14 @@ test.describe('Verify the Certificates', () => {
 		await expect(form.getByText(/Add this if the endpoint is signed by a private or ecosystem CA rather than a public one\./)).toBeVisible();
 		await expect(form.getByText(/This certificate is available to everyone on the project\./)).toBeVisible();
 		await expect(form.getByRole('button', { name: 'Add certificate', exact: true })).toBeVisible();
-		await cancelForm();
+		await run.tab.cancelForm();
 	});
 
 	test('Each certificate format asks for its own files', async () => {
-		await openForm();
-		const form = certificateForm();
+		await run.tab.openForm();
+		const form = run.tab.form;
 		// CRT + KEY: a certificate, a private key and an optional CA chain.
-		const [certificate, key, chain] = await acceptedFiles();
+		const [certificate, key, chain] = await run.tab.acceptedFiles();
 		for (const type of ['crt', 'pem', 'cer']) {
 			expect.soft(certificate, `certificate file accepts .${type}`).toContain(type);
 		}
@@ -84,18 +66,18 @@ test.describe('Verify the Certificates', () => {
 		expect.soft(chain, 'CA chain accepts .crt').toContain('crt');
 
 		// PFX bundle: one file carries both, so the private key is no longer asked for.
-		await form.getByRole('button', { name: 'PFX bundle', exact: true }).click();
+		await run.tab.formatButton('PFX bundle').click();
 		await expect(form.getByText(/^Certificate file \(PFX\)/)).toBeVisible();
 		await expect(form.getByText(/^Private key file/)).toHaveCount(0);
 		await expect(form.getByText('Browse file', { exact: true })).toHaveCount(2);
-		const [bundle] = await acceptedFiles();
+		const [bundle] = await run.tab.acceptedFiles();
 		for (const type of ['pfx', 'p12']) {
 			expect.soft(bundle, `PFX bundle accepts .${type}`).toContain(type);
 		}
 
-		await form.getByRole('button', { name: 'CRT + KEY', exact: true }).click();
+		await run.tab.formatButton('CRT + KEY').click();
 		await expect(form.getByText(/^Private key file/)).toBeVisible();
 		await expect(form.getByText('Browse file', { exact: true })).toHaveCount(3);
-		await cancelForm();
+		await run.tab.cancelForm();
 	});
 });

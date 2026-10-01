@@ -13,7 +13,8 @@
  * page.
  */
 import { expect, test } from '@playwright/test';
-import { expectTabElements, openTab, useSettingsTab } from '../../support/admin-settings';
+import { PlansAndBillingTab } from '../../pages/settings/tabs/PlansAndBillingTab';
+import { useSettingsTab } from '../../support/admin-settings';
 import { escapeRegExp } from '../../support/common';
 
 const plans = [
@@ -41,36 +42,36 @@ const plans = [
 const billingFields = ['Address line 1', 'Address line 2', 'City', 'State', 'Zipcode'];
 
 test.describe('Verify the Plans and Billing', () => {
-	const run = useSettingsTab('Plans & Billing');
+	const run = useSettingsTab(PlansAndBillingTab);
 
 	test('Open the Plans & Billing tab and check its elements', async () => {
-		await openTab(run.page, run.tab);
-		await expectTabElements(run.main, run.tab);
+		await run.tab.open();
+		await run.tab.expectElements();
 	});
 
 	test('Check the account\'s plan', async () => {
-		const plan = run.main.getByText(/^\w+ Plan$/).first();
+		const plan = run.tab.accountPlan;
 		await expect(plan).toBeVisible();
 		test.info().annotations.push({ type: 'plan', description: (await plan.innerText()).trim() });
-		await expect(run.main.getByText(/^\d+ Parallel$/).first()).toBeVisible();
-		const trial = run.main.getByText('In Trial', { exact: true });
+		await expect(run.tab.parallels).toBeVisible();
+		const trial = run.tab.trial;
 		if (await trial.isVisible()) {
 			// A trial says when it ends and offers to upgrade.
-			await expect(run.main.getByText(/^Your trial will expire on \w{3} \d{1,2}, \d{4}$/)).toBeVisible();
-			await expect(run.main.getByRole('button', { name: 'Add Card & Upgrade' })).toBeEnabled();
-			test.info().annotations.push({ type: 'trial', description: (await run.main.getByText(/^Your trial will expire on/).innerText()).trim() });
+			await expect(run.tab.text(/^Your trial will expire on \w{3} \d{1,2}, \d{4}$/)).toBeVisible();
+			await expect(run.tab.upgradeButton).toBeEnabled();
+			test.info().annotations.push({ type: 'trial', description: (await run.tab.trialEnd.innerText()).trim() });
 		}
 		// What the plan includes.
 		for (const allowance of [/^\d+$/, /^Parallel Tests$/, /^Allowed Queue$/, /^Free cloud automated minutes$/, /^Free local automated minutes$/]) {
-			await expect.soft(run.main.getByText(allowance).first(), String(allowance)).toBeVisible();
+			await expect.soft(run.tab.text(allowance).first(), String(allowance)).toBeVisible();
 		}
-		await expect.soft(run.main.getByText('Unlimited', { exact: true })).toHaveCount(2);
+		await expect.soft(run.tab.text('Unlimited')).toHaveCount(2);
 	});
 
 	test('Check the billing details and open the edit form', async () => {
-		await expect(run.main.getByText('Billing details', { exact: true })).toBeVisible();
-		await run.main.getByRole('button', { name: 'Edit details' }).click();
-		const form = run.page.getByRole('dialog');
+		await expect(run.tab.text('Billing details')).toBeVisible();
+		await run.tab.editDetailsButton.click();
+		const form = run.tab.dialog;
 		await expect(form.getByText('Edit Billing details', { exact: true })).toBeVisible();
 		await expect(form.getByRole('textbox', { name: 'accountadmin@company.com' })).toBeVisible();
 		// The form holds the billing address shown on the tab.
@@ -78,7 +79,7 @@ test.describe('Verify the Plans and Billing', () => {
 			const box = form.getByRole('textbox', { name: field, exact: true });
 			await expect.soft(box, field).not.toHaveValue('');
 			const value = await box.inputValue();
-			await expect.soft(run.main.getByText(new RegExp(escapeRegExp(value))).first(), `${field} shown on the tab`).toBeVisible();
+			await expect.soft(run.tab.text(new RegExp(escapeRegExp(value))).first(), `${field} shown on the tab`).toBeVisible();
 		}
 		await expect(form.getByText(/^Country\*?/)).toBeVisible();
 		await expect(form.getByRole('button', { name: 'Update', exact: true })).toBeVisible();
@@ -87,27 +88,18 @@ test.describe('Verify the Plans and Billing', () => {
 	});
 
 	test('Check the billing history and how to reach support', async () => {
-		await expect(run.main.getByRole('heading', { name: 'Billing history', level: 2 })).toBeVisible();
-		await expect(run.main.getByText(/^For payment or plan related queries, Please contact Testsigma Support through/)).toBeVisible();
-		await expect(run.main.getByRole('link', { name: 'Chat', exact: true })).toHaveAttribute('href', 'javascript:fcWidget.open()');
-		const email = run.main.getByRole('link', { name: 'support@testsigma.com', exact: true });
+		await expect(run.tab.billingHistory).toBeVisible();
+		await expect(run.tab.text(/^For payment or plan related queries, Please contact Testsigma Support through/)).toBeVisible();
+		await expect(run.tab.link('Chat')).toHaveAttribute('href', 'javascript:fcWidget.open()');
+		const email = run.tab.link('support@testsigma.com');
 		await expect(email).toHaveAttribute('href', 'mailto:support@testsigma.com');
 		await expect(email).toHaveAttribute('target', '_blank');
 	});
 
 	for (const plan of plans) {
 		test(`Check the ${plan.name} plan on offer`, async () => {
-			const heading = run.main.getByRole('heading', { name: plan.name, level: 1 });
-			await expect(heading).toBeVisible();
-			// Each plan on offer is a card of its own. The account's own plan is described above them in the same
-			// words, so each plan is checked within its card.
-			const otherPlans = plans.filter((other) => other.name !== plan.name);
-			let card = run.main.locator('div').filter({ has: run.page.getByRole('heading', { name: plan.name, level: 1 }) });
-			for (const other of otherPlans) {
-				card = card.filter({ hasNot: run.page.getByRole('heading', { name: other.name, level: 1 }) });
-			}
-			// The largest part of the page with this plan and no other is its card.
-			card = card.first();
+			await expect(run.tab.planHeading(plan.name)).toBeVisible();
+			const card = run.tab.planCard(plan.name, plans.filter((other) => other.name !== plan.name).map((other) => other.name));
 			await expect(card.getByText(plan.for, { exact: true })).toBeVisible();
 			await expect(card.getByRole('button', { name: plan.parallels, exact: true })).toBeVisible();
 			await expect(card.getByRole('button', { name: 'Contact Sales' })).toBeVisible();
@@ -115,11 +107,11 @@ test.describe('Verify the Plans and Billing', () => {
 				await expect.soft(card.getByText(feature, { exact: true }), feature).toBeVisible();
 			}
 			// Each plan can be asked about.
-			await expect(run.main.getByRole('button', { name: 'Contact Sales' })).toHaveCount(plans.length);
+			await expect(run.tab.contactSalesButtons).toHaveCount(plans.length);
 		});
 	}
 
 	test('One of the plans on offer is marked as the current plan', async () => {
-		await expect(run.main.getByText('Current plan', { exact: true })).toHaveCount(1);
+		await expect(run.tab.text('Current plan')).toHaveCount(1);
 	});
 });

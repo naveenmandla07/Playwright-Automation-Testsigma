@@ -13,7 +13,8 @@
  * switches are checked for what they show, and whether each is on or off is noted rather than expected.
  */
 import { expect, test } from '@playwright/test';
-import { expectTabElements, openTab, useSettingsTab } from '../../support/admin-settings';
+import { PreferencesTab } from '../../pages/settings/tabs/PreferencesTab';
+import { useSettingsTab } from '../../support/admin-settings';
 import { escapeRegExp } from '../../support/common';
 
 type Preference = { name: string; description: string | RegExp };
@@ -116,44 +117,39 @@ function asText(description: string | RegExp) {
 }
 
 test.describe('Verify the Preferences', () => {
-	const run = useSettingsTab('Preferences');
-
-	function switchOf(name: string) {
-		return run.main.getByRole('checkbox', { name, exact: true });
-	}
+	const run = useSettingsTab(PreferencesTab);
 
 	test('Open the Preferences tab and check its elements', async () => {
-		await openTab(run.page, run.tab);
-		await expectTabElements(run.main, run.tab);
+		await run.tab.open();
+		await run.tab.expectElements();
 	});
 
 	for (const preference of preferences) {
 		test(`Preference: ${preference.name}`, async () => {
-			const toggle = switchOf(preference.name);
-			await expect(run.main.getByText(preference.name, { exact: true }).last()).toBeVisible();
-			const description = run.main.getByRole('paragraph').filter({ hasText: asText(preference.description) });
+			const toggle = run.tab.switchOf(preference.name);
+			await expect(run.tab.text(preference.name).last()).toBeVisible();
+			const description = run.tab.paragraph(asText(preference.description));
 			await expect.soft(description.first(), `description of ${preference.name}`).toBeVisible();
-			// Each preference is turned on or off by its switch, drawn over the checkbox that names it.
 			await expect(toggle).toBeAttached();
-			await expect(toggle.locator('..').getByTestId('toggle-switch')).toBeVisible();
+			await expect(run.tab.switchDrawnOver(toggle)).toBeVisible();
 			test.info().annotations.push({ type: 'preference', description: `${preference.name} is ${(await toggle.isChecked()) ? 'on' : 'off'}` });
 		});
 	}
 
 	test('Check the preference sections', async () => {
 		for (const section of sections) {
-			await expect.soft(run.main.getByText(section.heading, { exact: true }).first(), section.heading).toBeVisible();
-			await expect.soft(run.main.getByRole('paragraph').filter({ hasText: asText(section.description) }), section.heading).toBeVisible();
+			await expect.soft(run.tab.text(section.heading).first(), section.heading).toBeVisible();
+			await expect.soft(run.tab.paragraph(asText(section.description)), section.heading).toBeVisible();
 			for (const name of section.preferences) {
-				await expect.soft(switchOf(name), name).toBeAttached();
+				await expect.soft(run.tab.switchOf(name), name).toBeAttached();
 			}
 		}
 		// The deprecated preference is labelled as such.
-		await expect(run.main.getByText('Deprecated', { exact: true })).toBeVisible();
+		await expect(run.tab.text('Deprecated')).toBeVisible();
 	});
 
 	test('Check who can stop executions is explained', async () => {
-		const explanation = run.main.getByRole('paragraph').filter({ has: run.page.getByRole('list') });
+		const explanation = run.tab.stopExplanation;
 		for (const item of [
 			'1.OFF [Default]',
 			'2.ON',
@@ -166,22 +162,22 @@ test.describe('Verify the Preferences', () => {
 
 	test('Check the switches that cannot be used', async () => {
 		// Plan-level accessibility testing is deprecated, so its switch is locked.
-		await expect(switchOf('Web Accessibility Testing - Plan level')).toBeDisabled();
+		await expect(run.tab.switchOf('Web Accessibility Testing - Plan level')).toBeDisabled();
 		// Test Developers can only review their own work once Test Managers can review it.
-		const reviewOn = (await switchOf('Test Case Review Management').isChecked()) || (await switchOf('Element Review Management').isChecked());
+		const reviewOn = (await run.tab.switchOf('Test Case Review Management').isChecked()) || (await run.tab.switchOf('Element Review Management').isChecked());
 		test.info().annotations.push({ type: 'review management', description: reviewOn ? 'on' : 'off' });
 		if (!reviewOn) {
-			await expect(switchOf('Self-Review Management')).toBeDisabled();
+			await expect(run.tab.switchOf('Self-Review Management')).toBeDisabled();
 		}
 	});
 
 	test('Check the Copilot & Recorder Extension choices', async () => {
-		await expect(run.main.getByText('Copilot & Recorder Extension', { exact: true })).toBeVisible();
-		await expect(run.main.getByRole('paragraph').filter({ hasText: 'Choose how the recorder extension is set up' }))
+		await expect(run.tab.text('Copilot & Recorder Extension')).toBeVisible();
+		await expect(run.tab.paragraph('Choose how the recorder extension is set up'))
 			.toHaveText('Choose how the recorder extension is set up in the browser Testsigma launches for Copilot recording sessions.');
 		let chosen = 0;
 		for (const choice of recorderChoices) {
-			const option = run.main.getByRole('radio', { name: `${choice.name} ${choice.description}`, exact: true });
+			const option = run.tab.recorderChoice(choice.name, choice.description);
 			await expect.soft(option, choice.name).toBeAttached();
 			if (await option.isChecked()) {
 				chosen += 1;

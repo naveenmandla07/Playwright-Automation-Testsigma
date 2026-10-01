@@ -9,7 +9,8 @@
  * The tab only shows what each role may do; there is nothing on it to change.
  */
 import { expect, test } from '@playwright/test';
-import { expectTabElements, openTab, useSettingsTab } from '../../support/admin-settings';
+import { UserRolesTab } from '../../pages/settings/tabs/UserRolesTab';
+import { useSettingsTab } from '../../support/admin-settings';
 
 const roles = [
 	{ name: 'Super Administrator', about: 'Has complete control over the Testsigma account, but is restricted from viewing Account or Billing related information.' },
@@ -59,27 +60,26 @@ const access: [string, Access[]][] = [
 ];
 
 test.describe('Verify the User Roles', () => {
-	const run = useSettingsTab('User Roles');
+	const run = useSettingsTab(UserRolesTab);
 
 	test('Open the User Roles tab and check its elements', async () => {
-		await openTab(run.page, run.tab);
-		await expectTabElements(run.main, run.tab);
-		await expect(run.main.getByText(/Account admin is the only person who has Full access to all entities, billing and account related information/)).toBeVisible();
+		await run.tab.open();
+		await run.tab.expectElements();
+		await expect(run.tab.text(/Account admin is the only person who has Full access to all entities, billing and account related information/)).toBeVisible();
 	});
 
 	test('Check what each role is for', async () => {
-		// Each role's heading has a help icon, in the same order as the roles.
-		const helps = run.main.getByTestId('help');
+		const helps = run.tab.helpIcons;
 		await expect(helps).toHaveCount(roles.length);
 		for (const [index, role] of roles.entries()) {
 			await helps.nth(index).hover();
-			await expect.soft(run.page.getByRole('tooltip', { name: role.about }).first(), role.name).toBeVisible();
+			await expect.soft(run.tab.tooltip(role.about), role.name).toBeVisible();
 		}
 	});
 
 	for (const [entity, levels] of access) {
 		test(`Access to ${entity}`, async () => {
-			const row = run.main.getByRole('row', { name: new RegExp(`^${entity}( (Full|Read only|No access)){5}$`) });
+			const row = run.tab.entityRow(entity);
 			await expect(row).toBeVisible();
 			const shown = (await row.getAttribute('aria-label')) ?? (await row.innerText());
 			const given = shown.replace(/\s+/g, ' ').slice(entity.length).trim().match(/Full|Read only|No access/g);

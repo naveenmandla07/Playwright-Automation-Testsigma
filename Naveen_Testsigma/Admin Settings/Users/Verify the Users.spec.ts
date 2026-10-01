@@ -15,12 +15,12 @@
  * Nothing is changed: no invitation is sent, and "Make Org Owner", "Edit user role" and "Deactivate User" are
  * checked but never clicked. The users belong to the account, so they are read from the page.
  */
-import { expect, test, type Locator } from '@playwright/test';
-import { expectMenuOptions, expectTabElements, openTab, reopenTab, searchAttemptTime, searchFor, searchTime, useSettingsTab } from '../../support/admin-settings';
+import { expect, test } from '@playwright/test';
+import { searchAttemptTime, searchTime } from '../../pages/settings/SettingsPage';
+import { UsersTab } from '../../pages/settings/tabs/UsersTab';
+import { useSettingsTab } from '../../support/admin-settings';
 import { accountEmail } from '../../support/testsigma-auth';
 import { byName, noResults } from '../../support/common';
-
-type User = { name: string; status: string; email: string; allocation: string; roles: string };
 
 const statuses = ['Active', 'Invited', 'Inactive', 'Waitlisted'];
 const groups = [
@@ -33,61 +33,18 @@ const sortOptions = ['Name', 'Created Date', 'Updated Date', 'A to Z', 'Z to A']
 const noUsers = 'No Users Available';
 const neverInvited = 'playwright.never.invited@example.com';
 
-// Each user is a row inside the grid's own wrapping row.
-function userRows(main: Locator) {
-	return main.getByRole('grid').getByRole('row').getByRole('row');
-}
-
-// A user's lines: name, then any roles, status, email and parallel allocation.
-async function listedUsers(main: Locator): Promise<User[]> {
-	return Promise.all((await userRows(main).all()).map(async (row) => {
-		const lines = (await row.innerText()).split('\n').map((line) => line.trim()).filter(Boolean);
-		const emailAt = lines.findIndex((line) => line.includes('@'));
-		return {
-			name: lines[0],
-			roles: lines.slice(1, emailAt - 1).join(', '),
-			status: lines[emailAt - 1],
-			email: lines[emailAt],
-			allocation: lines[emailAt + 1],
-		};
-	}));
-}
-
 test.describe('Verify the Users', () => {
-	const run = useSettingsTab('Users');
-
-	function inviteForm() {
-		return run.page.getByRole('dialog');
-	}
-
-	async function openInviteForm() {
-		await run.main.getByRole('button', { name: 'Add new user' }).click();
-		await expect(inviteForm().getByRole('textbox', { name: 'Email' })).toBeVisible();
-	}
-
-	async function cancelInviteForm() {
-		await inviteForm().getByRole('button', { name: 'Cancel', exact: true }).click();
-		await expect(inviteForm()).toHaveCount(0);
-	}
-
-	// The sort options stay open after one is chosen, so open them only when they are not showing.
-	async function sortBy(option: string) {
-		const choice = run.main.getByText(option, { exact: true }).last();
-		if (!(await choice.isVisible())) {
-			await run.main.getByText('Sort by', { exact: true }).click();
-		}
-		await choice.click();
-	}
+	const run = useSettingsTab(UsersTab);
 
 	test('Open the Users tab and check its elements', async () => {
-		await openTab(run.page, run.tab);
-		await expectTabElements(run.main, run.tab);
-		const users = await listedUsers(run.main);
-		await expect(run.main.getByText(`All (${users.length})`, { exact: true })).toBeVisible();
+		await run.tab.open();
+		await run.tab.expectElements();
+		const users = await run.tab.listedUsers();
+		await expect(run.tab.text(`All (${users.length})`)).toBeVisible();
 	});
 
 	test('Check every user listed', async () => {
-		const users = await listedUsers(run.main);
+		const users = await run.tab.listedUsers();
 		expect(users.length, 'users listed').toBeGreaterThan(0);
 		for (const user of users) {
 			expect.soft(user.name, `name of ${user.email}`).toMatch(/\S/);
@@ -104,91 +61,90 @@ test.describe('Verify the Users', () => {
 	});
 
 	test('Show each group of users', async () => {
-		const users = await listedUsers(run.main);
+		const users = await run.tab.listedUsers();
 		for (const group of groups) {
-			const tab = run.main.getByText(new RegExp(`^${group.name} \\((\\d+)\\)$`));
+			const tab = run.tab.group(group.name);
 			const count = Number((await tab.innerText()).match(/\((\d+)\)/)![1]);
 			// Each group counts the users with its status.
 			expect.soft(count, group.name).toBe(users.filter((user) => user.status === group.status).length);
 			await tab.click();
 			if (count === 0) {
-				await expect.soft(run.main.getByText(noUsers, { exact: true }), group.name).toBeVisible();
+				await expect.soft(run.tab.text(noUsers), group.name).toBeVisible();
 			} else {
-				await expect.poll(async () => (await listedUsers(run.main)).map((user) => user.status), { message: group.name, timeout: searchTime })
+				await expect.poll(async () => (await run.tab.listedUsers()).map((user) => user.status), { message: group.name, timeout: searchTime })
 					.toEqual(Array(count).fill(group.status));
 			}
 		}
 		// Pending requests are users asking to join, who are not among the users listed.
-		await run.main.getByText('Pending requests', { exact: true }).click();
-		await expect.poll(async () => (await run.main.getByText(noUsers, { exact: true }).isVisible())
-			|| (await listedUsers(run.main)).every((user) => !users.some((listed) => listed.email === user.email)), { message: 'pending requests', timeout: searchTime }).toBe(true);
-		await run.main.getByText(/^All \(\d+\)$/).click();
-		await expect.poll(() => listedUsers(run.main), { timeout: searchTime }).toEqual(users);
+		await run.tab.pendingRequests.click();
+		await expect.poll(async () => (await run.tab.text(noUsers).isVisible())
+			|| (await run.tab.listedUsers()).every((user) => !users.some((listed) => listed.email === user.email)), { message: 'pending requests', timeout: searchTime }).toBe(true);
+		await run.tab.allGroup.click();
+		await expect.poll(() => run.tab.listedUsers(), { timeout: searchTime }).toEqual(users);
 	});
 
 	test('Search the users', async () => {
-		const search = run.main.getByRole('textbox', { name: 'Search', exact: true });
-		const users = await listedUsers(run.main);
+		const search = run.tab.search;
+		const users = await run.tab.listedUsers();
 		const [first] = users;
 		const matching = users.filter((user) => `${user.name} ${user.email}`.toLowerCase().includes(first.name.toLowerCase()));
-		await searchFor(search, first.name, async () => {
-			await expect.poll(async () => (await listedUsers(run.main)).map((user) => user.email).sort(), { message: 'users matching the search', timeout: searchAttemptTime })
+		await run.tab.searchFor(search, first.name, async () => {
+			await expect.poll(async () => (await run.tab.listedUsers()).map((user) => user.email).sort(), { message: 'users matching the search', timeout: searchAttemptTime })
 				.toEqual(matching.map((user) => user.email).sort());
 		});
 		await search.fill('zz-no-such-user');
-		await expect(run.main.getByText(noResults, { exact: true })).toBeVisible({ timeout: searchTime });
-		await expect(run.main.getByRole('img', { name: 'Empty state illustration' })).toBeVisible();
+		await expect(run.tab.text(noResults)).toBeVisible({ timeout: searchTime });
+		await expect(run.tab.emptyState).toBeVisible();
 		await search.clear();
-		await expect.poll(() => listedUsers(run.main), { timeout: searchTime }).toEqual(users);
+		await expect.poll(() => run.tab.listedUsers(), { timeout: searchTime }).toEqual(users);
 	});
 
 	test('Sort the users', async () => {
-		await expectMenuOptions(run.main, () => run.main.getByText('Sort by', { exact: true }).click(), sortOptions);
-		const names = (await listedUsers(run.main)).map((user) => user.name);
-		await sortBy('Z to A');
-		await expect.poll(async () => (await listedUsers(run.main)).map((user) => user.name), { timeout: searchTime })
+		await run.tab.expectMenuOptions(() => run.tab.sortByLabel.click(), sortOptions);
+		const names = (await run.tab.listedUsers()).map((user) => user.name);
+		await run.tab.sortBy('Z to A');
+		await expect.poll(async () => (await run.tab.listedUsers()).map((user) => user.name), { timeout: searchTime })
 			.toEqual([...names].sort(byName).reverse());
 		// A to Z is how the users are listed at first, so the list is left that way.
-		await sortBy('A to Z');
-		await expect.poll(async () => (await listedUsers(run.main)).map((user) => user.name), { timeout: searchTime })
+		await run.tab.sortBy('A to Z');
+		await expect.poll(async () => (await run.tab.listedUsers()).map((user) => user.name), { timeout: searchTime })
 			.toEqual([...names].sort(byName));
-		await reopenTab(run.page, run.tab);
+		await run.tab.reopen();
 	});
 
 	test('Check what a user\'s menu offers', async () => {
-		const users = await listedUsers(run.main);
+		const users = await run.tab.listedUsers();
 		const other = users.find((user) => user.email !== accountEmail && user.status === 'Active');
 		test.skip(!other, 'There is no other active user.');
-		const row = userRows(run.main).filter({ hasText: other!.email });
-		await row.getByTestId('more-vertical').click();
+		const row = run.tab.userRow(other!.email);
+		await run.tab.openUserMenu(row);
 		for (const choice of ['View details', 'Make Org Owner', 'Edit user role', 'Deactivate User']) {
 			await expect.soft(row.getByText(choice, { exact: true }), choice).toBeVisible();
 		}
-		await run.main.getByText('Sort by', { exact: true }).click();
-		await reopenTab(run.page, run.tab);
+		await run.tab.sortByLabel.click();
+		await run.tab.reopen();
 
 		// The signed-in account can only view its own details.
-		const mine = userRows(run.main).filter({ hasText: accountEmail });
-		await mine.getByTestId('more-vertical').click();
+		const mine = run.tab.userRow(accountEmail);
+		await run.tab.openUserMenu(mine);
 		await expect(mine.getByText('View details', { exact: true })).toBeVisible();
 		for (const choice of ['Make Org Owner', 'Edit user role', 'Deactivate User']) {
 			await expect.soft(mine.getByText(choice, { exact: true }), choice).toHaveCount(0);
 		}
-		await reopenTab(run.page, run.tab);
+		await run.tab.reopen();
 	});
 
 	test('Open the Add new user form and check its fields', async () => {
-		await openInviteForm();
-		const form = inviteForm();
-		await expect(form.getByText('Add new user', { exact: true })).toBeVisible();
-		await expect(form.getByRole('textbox', { name: 'Email' })).toBeEmpty();
-		await expect(form.getByRole('textbox', { name: 'Email' })).toHaveAttribute('placeholder', 'Enter email');
-		await expect(form.getByRole('checkbox', { name: 'Super Administrator' })).not.toBeChecked();
-		await expect(form.getByRole('checkbox', { name: 'Read Only' })).not.toBeChecked();
-		await expect(form.getByText(/Select projects to assign/)).toBeVisible();
-		await expect(form.getByRole('textbox', { name: 'Search Project to assign' })).toBeVisible();
+		const form = await run.tab.openInviteForm();
+		await expect(form.text('Add new user')).toBeVisible();
+		await expect(form.email).toBeEmpty();
+		await expect(form.email).toHaveAttribute('placeholder', 'Enter email');
+		await expect(form.checkbox('Super Administrator')).not.toBeChecked();
+		await expect(form.checkbox('Read Only')).not.toBeChecked();
+		await expect(form.text(/Select projects to assign/)).toBeVisible();
+		await expect(form.projectSearch).toBeVisible();
 		// Every project is listed to assign; a ticked project shows the access role the new user would have in it.
-		const projects = form.getByRole('grid').getByRole('row').getByRole('row');
+		const projects = form.projects;
 		await expect(projects.first()).toBeVisible();
 		const count = await projects.count();
 		let ticked = 0;
@@ -203,61 +159,58 @@ test.describe('Verify the Users', () => {
 			}
 		}
 		test.info().annotations.push({ type: 'projects to assign', description: `${count} shown, ${ticked} ticked` });
-		await expect(form.getByText(/The user will be able to access the product, once the user accepts the invite/)).toBeVisible();
+		await expect(form.text(/The user will be able to access the product, once the user accepts the invite/)).toBeVisible();
 		// "Send Invite" can be clicked before an email is entered.
-		await expect(form.getByRole('button', { name: 'Send Invite' })).toBeEnabled();
-		await cancelInviteForm();
+		await expect(form.sendInvite).toBeEnabled();
+		await form.cancel();
 	});
 
 	test('An invalid email is pointed out', async () => {
-		await openInviteForm();
-		const email = inviteForm().getByRole('textbox', { name: 'Email' });
+		const form = await run.tab.openInviteForm();
+		const email = form.email;
 		await email.fill('not-an-email');
-		await inviteForm().getByRole('textbox', { name: 'Search Project to assign' }).click();
-		await expect(inviteForm().getByText('email must be a valid email', { exact: true })).toBeVisible();
+		await form.projectSearch.click();
+		await expect(form.text('email must be a valid email')).toBeVisible();
 		await email.fill(neverInvited);
-		await expect(inviteForm().getByText('email must be a valid email', { exact: true })).toHaveCount(0);
-		await cancelInviteForm();
+		await expect(form.text('email must be a valid email')).toHaveCount(0);
+		await form.cancel();
 	});
 
 	test('A Super Administrator gets every project, and may be an Account Administrator', async () => {
-		await openInviteForm();
-		const form = inviteForm();
-		await form.getByText('Super Administrator', { exact: true }).click();
-		await expect(form.getByRole('checkbox', { name: 'Super Administrator' })).toBeChecked();
-		await expect(form.getByRole('checkbox', { name: 'Account Administrator' })).not.toBeChecked();
-		await expect(form.getByText(/By default full access will be granted to all existing projects and the projects that your team creates in the future/)).toBeVisible();
+		const form = await run.tab.openInviteForm();
+		await form.text('Super Administrator').click();
+		await expect(form.checkbox('Super Administrator')).toBeChecked();
+		await expect(form.checkbox('Account Administrator')).not.toBeChecked();
+		await expect(form.text(/By default full access will be granted to all existing projects and the projects that your team creates in the future/)).toBeVisible();
 		// Projects are no longer picked one by one.
-		await expect(form.getByRole('textbox', { name: 'Search Project to assign' })).toHaveCount(0);
-		await expect(form.getByRole('checkbox', { name: 'Read Only' })).toHaveCount(0);
-		await form.getByText('Super Administrator', { exact: true }).click();
-		await expect(form.getByRole('textbox', { name: 'Search Project to assign' })).toBeVisible();
-		await cancelInviteForm();
+		await expect(form.projectSearch).toHaveCount(0);
+		await expect(form.checkbox('Read Only')).toHaveCount(0);
+		await form.text('Super Administrator').click();
+		await expect(form.projectSearch).toBeVisible();
+		await form.cancel();
 	});
 
 	test('A Read Only user reads specific pages', async () => {
-		await openInviteForm();
-		const form = inviteForm();
-		await form.getByText('Read Only', { exact: true }).click();
-		await expect(form.getByRole('checkbox', { name: 'Read Only' })).toBeChecked();
-		await expect(form.getByText(/The user will have read-only access to the product on specific pages/)).toBeVisible();
-		await expect(form.getByRole('textbox', { name: 'Search Project to assign' })).toHaveCount(0);
-		await expect(form.getByRole('checkbox', { name: 'Super Administrator' })).toHaveCount(0);
-		await form.getByText('Read Only', { exact: true }).click();
-		await expect(form.getByRole('textbox', { name: 'Search Project to assign' })).toBeVisible();
-		await cancelInviteForm();
+		const form = await run.tab.openInviteForm();
+		await form.text('Read Only').click();
+		await expect(form.checkbox('Read Only')).toBeChecked();
+		await expect(form.text(/The user will have read-only access to the product on specific pages/)).toBeVisible();
+		await expect(form.projectSearch).toHaveCount(0);
+		await expect(form.checkbox('Super Administrator')).toHaveCount(0);
+		await form.text('Read Only').click();
+		await expect(form.projectSearch).toBeVisible();
+		await form.cancel();
 	});
 
 	test('Search the projects to assign', async () => {
-		await openInviteForm();
-		const form = inviteForm();
-		const projects = form.getByRole('grid').getByRole('row').getByRole('row');
+		const form = await run.tab.openInviteForm();
+		const projects = form.projects;
 		const first = (await projects.first().getByRole('checkbox').getAttribute('aria-label'))!;
 		const shownProjects = () => projects.getByRole('checkbox').evaluateAll((boxes) => boxes.map((box) => (box.getAttribute('aria-label') ?? '').toLowerCase()));
-		await form.getByRole('textbox', { name: 'Search Project to assign' }).fill(first);
+		await form.projectSearch.fill(first);
 		// Only projects matching the search stay listed, including the one searched for.
 		await expect.poll(async () => (await shownProjects()).every((name) => name.includes(first.toLowerCase())), { message: 'projects matching the search', timeout: searchTime }).toBe(true);
 		expect(await shownProjects()).toContain(first.toLowerCase());
-		await cancelInviteForm();
+		await form.cancel();
 	});
 });

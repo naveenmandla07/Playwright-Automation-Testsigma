@@ -12,8 +12,10 @@
  * account holds (users, labels, exports and so on) changes over time, so tables are checked by their column
  * headings rather than their rows, and counts such as "All (9)" by their pattern rather than their number.
  */
-import { expect, test, type Locator, type Page } from '@playwright/test';
-import { expectTabElements, openSettings, openSignedInSettings, openTab, settingsTab, tabs } from '../support/admin-settings';
+import { expect, test } from '@playwright/test';
+import { SettingsPage } from '../pages/settings/SettingsPage';
+import { tabs } from '../pages/settings/settingsTabs';
+import { openSignedInSettings } from '../support/admin-settings';
 import { missingCredentials, missingCredentialsMessage } from '../support/testsigma-auth';
 
 test.describe('Verify all the settings module and navigate them', () => {
@@ -22,37 +24,34 @@ test.describe('Verify all the settings module and navigate them', () => {
 	test.describe.configure({ mode: 'default', timeout: 120000 });
 	test.skip(missingCredentials, missingCredentialsMessage);
 
-	let page: Page;
-	let main: Locator;
+	let settings: SettingsPage;
 
 	test.beforeAll(async ({ browser }) => {
 		// Signing in and opening Settings can take longer than a hook's own 30 seconds.
 		test.setTimeout(120000);
-		page = await openSignedInSettings(browser);
-		main = page.locator('main');
+		settings = new SettingsPage(await openSignedInSettings(browser));
 	});
 
 	test.afterAll(async () => {
-		await page.close();
+		await settings.page.close();
 	});
 
 	test('Open Settings and check the Admin Settings tabs', async () => {
-		await openSettings(page);
+		await settings.openSettings();
 		for (const tab of tabs) {
-			await expect(settingsTab(main, tab.name)).toBeVisible();
+			await expect(settings.tabButton(tab.name)).toBeVisible();
 		}
 		// The tabs come first in the page, in this order.
-		const shown = (await main.getByRole('button').allInnerTexts()).map((text) => text.trim()).slice(0, tabs.length);
-		expect(shown).toEqual(tabs.map((tab) => tab.name));
+		expect(await settings.firstButtonNames(tabs.length)).toEqual(tabs.map((tab) => tab.name));
 	});
 
 	for (const tab of tabs) {
 		test(`${tab.name} tab`, async () => {
-			await openTab(page, tab);
-			await expectTabElements(main, tab);
+			await settings.openTab(tab);
+			await settings.expectTabElements(tab);
 			// The tab list stays in place on every tab.
-			await expect(settingsTab(main, tabs[0].name)).toBeVisible();
-			await expect(settingsTab(main, tabs[tabs.length - 1].name)).toBeVisible();
+			await expect(settings.tabButton(tabs[0].name)).toBeVisible();
+			await expect(settings.tabButton(tabs[tabs.length - 1].name)).toBeVisible();
 		});
 	}
 });

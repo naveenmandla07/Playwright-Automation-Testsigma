@@ -17,8 +17,9 @@
  * change was sent to Testsigma. "Delete credentials" and "Update details" are checked but never clicked. Saved
  * details are checked to be filled in, not for their values, since they belong to the account.
  */
-import { expect, test, type Locator, type Page } from '@playwright/test';
-import { expectTabElements, openTab, useSettingsTab } from '../../support/admin-settings';
+import { expect, test, type Locator } from '@playwright/test';
+import { IntegrationsTab } from '../../pages/settings/tabs/IntegrationsTab';
+import { useSettingsTab } from '../../support/admin-settings';
 import { escapeRegExp } from '../../support/common';
 
 // What a popup shows: its heading, its fields and buttons, and anything else on it.
@@ -377,29 +378,6 @@ const categoryIntegrations: Record<string, string[]> = {
 	CICD: ['Azure DevOps', 'CircleCI', 'Bamboo', 'Amazon Web Services', 'TravisCI', 'Jenkins', 'CodeShip CI', 'GitHub CI/CD', 'GitLab CI/CD'],
 };
 
-function nameOf(main: Locator, integration: Integration) {
-	return integration.match ? main.getByText(integration.match) : main.getByText(integration.name, { exact: true });
-}
-
-// An integration's card holds its logo, name, description, "Learn more" link and switch.
-function cardOf(main: Locator, integration: Integration) {
-	return nameOf(main, integration).first().locator("xpath=ancestor::div[.//a[normalize-space()='Learn more']][1]");
-}
-
-// The switch's checkbox is only there for screen readers; the switch drawn beside it is what takes the click.
-function switchOf(card: Locator) {
-	return card.getByRole('checkbox');
-}
-
-// The names of the integrations the page is showing, in order, with line breaks inside a name read as spaces.
-async function shownIntegrations(page: Page) {
-	return page.evaluate(() =>
-		[...document.querySelectorAll('main img[alt="logo"]')]
-			.filter((logo) => (logo as HTMLElement).offsetParent !== null)
-			.map((logo) => ((logo.nextElementSibling as HTMLElement | null)?.innerText ?? '').replace(/\s+/g, ' ').trim()),
-	);
-}
-
 async function expectPopup(popup: Locator, expected: Popup, saved: boolean) {
 	await expect(popup.getByRole('heading', { name: expected.heading, exact: true })).toBeVisible();
 	for (const field of expected.fields ?? []) {
@@ -439,63 +417,64 @@ async function expectPopup(popup: Locator, expected: Popup, saved: boolean) {
 }
 
 test.describe('Verify all the integrations', () => {
-	const run = useSettingsTab('Integrations');
+	const run = useSettingsTab(IntegrationsTab);
 
 	test('Open the Integrations tab and check its elements', async () => {
-		await openTab(run.page, run.tab);
-		await expectTabElements(run.main, run.tab);
+		await run.tab.open();
+		await run.tab.expectElements();
 	});
 
 	test('Scroll to the end of the list', async () => {
-		await run.main.getByText('All Integrations', { exact: true }).click();
-		const last = cardOf(run.main, integrations[integrations.length - 1]);
+		await run.tab.showAll();
+		const last = run.tab.cardOf(integrations[integrations.length - 1]);
 		await last.scrollIntoViewIfNeeded();
 		await expect(last).toBeInViewport();
-		await expect(run.main.getByRole('link', { name: 'Learn more' }).last()).toBeInViewport();
-		expect(await shownIntegrations(run.page)).toEqual(categoryIntegrations['All Integrations']);
-		await run.main.getByText('All Integrations', { exact: true }).scrollIntoViewIfNeeded();
+		await expect(run.tab.learnMoreLinks.last()).toBeInViewport();
+		expect(await run.tab.shownIntegrations()).toEqual(categoryIntegrations['All Integrations']);
+		await run.tab.text('All Integrations').scrollIntoViewIfNeeded();
 	});
 
 	for (const category of categories) {
 		test(`Category tab: ${category}`, async () => {
-			await run.main.getByText(category, { exact: true }).first().click();
+			await run.tab.category(category).click();
 			const expected = categoryIntegrations[category];
-			await expect.poll(() => shownIntegrations(run.page), { message: `integrations under ${category}` }).toEqual(expected);
-			await expect(run.main.getByRole('link', { name: 'Learn more' }).filter({ visible: true })).toHaveCount(expected.length);
-			await run.main.getByText('All Integrations', { exact: true }).click();
-			await expect.poll(() => shownIntegrations(run.page)).toHaveLength(integrations.length);
+			await expect.poll(() => run.tab.shownIntegrations(), { message: `integrations under ${category}` }).toEqual(expected);
+			await expect(run.tab.learnMoreLinks.filter({ visible: true })).toHaveCount(expected.length);
+			await run.tab.showAll();
+			await expect.poll(() => run.tab.shownIntegrations()).toHaveLength(integrations.length);
 		});
 	}
 
 	for (const integration of integrations) {
 		test(`Integration: ${integration.name}`, async () => {
-			const card = cardOf(run.main, integration);
+			const card = run.tab.cardOf(integration);
+			const cardSwitch = run.tab.cardSwitch(card);
 			await card.scrollIntoViewIfNeeded();
 			await expect(card.getByRole('img', { name: 'logo' })).toBeVisible();
-			await expect(nameOf(run.main, integration).first()).toBeVisible();
+			await expect(run.tab.nameOf(integration).first()).toBeVisible();
 			await expect.soft(card.getByText(new RegExp(`^${escapeRegExp(integration.description)}`))).toBeVisible();
 			await expect.soft(card.getByRole('link', { name: 'Learn more' })).toHaveAttribute('href', integration.docs);
 
-			const manage = card.getByRole('button', { name: 'Manage', exact: true });
+			const manage = run.tab.manageButton(card);
 			if (integration.pending) {
 				// In place of a switch, an icon says what the integration is waiting for.
 				await card.locator('svg').last().hover();
 				await expect.soft(run.page.getByRole('tooltip', { name: integration.pending }).first()).toBeVisible();
 			}
 			if (integration.switch === 'none') {
-				await expect(switchOf(card)).toHaveCount(0);
+				await expect(cardSwitch).toHaveCount(0);
 				await expect(manage).toHaveCount(0);
 				return;
 			}
 			if (integration.switch === 'unusable') {
-				await expect(switchOf(card)).toBeDisabled();
-				await expect(switchOf(card)).not.toBeChecked();
+				await expect(cardSwitch).toBeDisabled();
+				await expect(cardSwitch).not.toBeChecked();
 				await expect(manage).toHaveCount(0);
 				return;
 			}
 
-			const popup = run.page.getByRole('dialog');
-			const isOn = await switchOf(card).isChecked();
+			const popup = run.tab.dialog;
+			const isOn = await cardSwitch.isChecked();
 			test.info().annotations.push({ type: 'switch', description: `${integration.name} is switched ${isOn ? 'on' : 'off'}` });
 			if (isOn) {
 				// Switched on: "Manage" shows the saved details. Close them without changing anything.
@@ -505,16 +484,16 @@ test.describe('Verify all the integrations', () => {
 				await expectPopup(popup, expected, true);
 				await run.page.keyboard.press('Escape');
 				await expect(popup).toHaveCount(0);
-				await expect(switchOf(card)).toBeChecked();
+				await expect(cardSwitch).toBeChecked();
 			} else {
 				// Switched off: switching it on asks for its details. Cancel without saving, which leaves it off.
 				await expect(manage).toHaveCount(0);
-				await switchOf(card).locator('..').getByTestId('toggle-switch').click();
+				await run.tab.switchOn(card);
 				const expected = integration.setup ?? detailsForm(integration.name, []);
 				await expectPopup(popup, expected, false);
 				await popup.getByRole('button', { name: 'Cancel', exact: true }).click();
 				await expect(popup).toHaveCount(0);
-				await expect(switchOf(card)).not.toBeChecked();
+				await expect(cardSwitch).not.toBeChecked();
 			}
 		});
 	}
