@@ -31,6 +31,12 @@ function projectSwitcherOf(page: Page) {
 	};
 }
 
+// A project's own row in the open Project dropdown. When the search leaves one project, the list's wrapping row
+// has the same name as it, so the row wanted is the one holding no other rows.
+function projectRow(page: Page, name: string) {
+	return page.getByRole('row', { name, exact: true }).filter({ hasNot: page.getByRole('row') });
+}
+
 // Opens the project switcher from the side navigation, which only shows its labels while hovered, and checks it.
 export async function openProjectSwitcher(page: Page) {
 	const switcher = projectSwitcherOf(page);
@@ -56,10 +62,10 @@ export async function createOrSwitchToProject(page: Page, switcher: ProjectSwitc
 		await expect(searchField).toBeVisible();
 		await searchField.fill(project.name);
 
-		const existingProjectRow = page.getByRole('row', { name: project.name, exact: true });
+		const existingProjectRow = projectRow(page, project.name);
 		projectAlreadyExists = await existingProjectRow.count() > 0;
 		if (projectAlreadyExists) {
-			await existingProjectRow.first().click();
+			await existingProjectRow.click();
 		}
 	}
 
@@ -156,7 +162,7 @@ export async function checkSelectingProjects(page: Page, switcher: ProjectSwitch
 	}
 	await projectDropdown.click();
 	await searchField.fill(project.name);
-	const createdProjectRow = page.getByRole('row', { name: project.name, exact: true });
+	const createdProjectRow = projectRow(page, project.name);
 	await expect(createdProjectRow).toBeVisible();
 	await createdProjectRow.click();
 	await expect(projectDropdown).toContainText(project.name);

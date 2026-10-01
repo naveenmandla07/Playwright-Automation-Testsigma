@@ -2,7 +2,7 @@
  * Every editable Project Settings field on a Modern project, then deleting the project.
  *
  * Scenario (one test, reported step by step):
- * - Create or switch to "Testsigma_Settings_Delete_Modern".
+ * - Delete any "Testsigma_Settings_Delete_Modern" left by a run that failed part way, then create it afresh.
  * - Open Project Settings and check each tab: Project Details, Applications, Versions, test case and requirement
  *   types, and Project Members.
  * - Turn every project option on and off, saving and verifying each change.
@@ -18,12 +18,13 @@
  *
  * Runs in the serial chromium-projects project because it changes the account's current project.
  */
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { checkSelectingProjects, createOrSwitchToProject, openProjectSwitcher, type NewProject } from '../support/create-project';
 import { accountEmail, missingCredentials, missingCredentialsMessage, signInToTestsigma } from '../support/testsigma-auth';
 import { escapeRegExp } from '../support/common';
 
 const projectName = 'Testsigma_Settings_Delete_Modern';
+const updatedProjectName = `${projectName}_Updated`;
 const project: NewProject = {
 	name: projectName,
 	engine: 'Modern',
@@ -32,6 +33,19 @@ const project: NewProject = {
 	description: 'Project created by the Testsigma Playwright automation suite using the Modern engine.',
 };
 
+// A run that fails part way leaves its project behind, already partly changed, so each run deletes any project
+// left with its name, before or after renaming, and starts from a new one.
+async function deleteLeftoverProjects(page: Page) {
+	const leftovers = async () => ((await (await page.request.get('/private/projects?size=500&page=0')).json()).content as { id: number; name: string }[])
+		.filter((item) => [projectName, updatedProjectName].includes(item.name));
+	for (const leftover of await leftovers()) {
+		expect((await page.request.delete(`/private/projects/${leftover.id}`)).ok(), `delete leftover ${leftover.name}`).toBe(true);
+	}
+	await expect.poll(async () => (await leftovers()).length, { timeout: 30000 }).toBe(0);
+	// The current project may have been one of them, so load the page again to show the one Testsigma moved to.
+	await page.reload();
+}
+
 test('[Modern] Verify all editable project settings, persistence and deletion', async ({ page }) => {
 	test.setTimeout(360000);
 	page.setDefaultTimeout(15000);
@@ -39,6 +53,7 @@ test('[Modern] Verify all editable project settings, persistence and deletion', 
 
 	try {
 		await signInToTestsigma(page);
+		await deleteLeftoverProjects(page);
 
 		const switcher = await openProjectSwitcher(page);
 		const { projectApplicationTab, projectDropdown, applicationDropdown, versionDropdown, projectSettings } = switcher;
@@ -117,7 +132,6 @@ test('[Modern] Verify all editable project settings, persistence and deletion', 
 			}
 		});
 
-		const updatedProjectName = `${projectName}_Updated`;
 		const updatedApplicationName = 'Web App Updated';
 		const updatedVersionName = 'modern web updated';
 		const projectDescription = 'Project description updated by Playwright.';
