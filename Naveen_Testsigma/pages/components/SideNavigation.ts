@@ -18,6 +18,13 @@ export class SideNavigation {
 		return this.root.getByRole('link', { name });
 	}
 
+	// Opens a page grouped under Test Data, e.g. "Environments", hovering the navigation so its labels show.
+	async openUnderTestData(name: string, { exact }: { exact?: boolean } = {}) {
+		await this.page.mouse.move(20, 300);
+		await this.page.getByRole('button', { name: 'Test Data', exact: true }).click();
+		await this.page.getByRole('link', { name, exact }).click();
+	}
+
 	// The profile menu at the bottom shows the user's initial, name and role; it is matched by its structure so any
 	// account works.
 	get profileMenu() {
