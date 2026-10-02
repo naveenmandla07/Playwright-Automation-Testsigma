@@ -32,6 +32,12 @@ export class SideNavigation {
 		await this.page.getByRole('link', { name, exact }).click();
 	}
 
+	// The id of the version the account is on, which the Test Suites link carries in its address, e.g. /ui/td/123/suites.
+	async currentVersionId() {
+		const href = await this.page.getByRole('link', { name: 'Test Suites' }).getAttribute('href');
+		return href?.match(/\/td\/([^/]+)/)?.[1];
+	}
+
 	// The profile menu at the bottom shows the user's initial, name and role; it is matched by its structure so any
 	// account works.
 	get profileMenu() {

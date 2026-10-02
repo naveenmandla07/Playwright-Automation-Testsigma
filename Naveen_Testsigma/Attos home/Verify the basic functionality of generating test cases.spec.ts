@@ -15,9 +15,13 @@
  * Adds one test case to the library on every run.
  */
 import { expect, test, type Page } from '@playwright/test';
+import { AttoHomePage } from '../pages/atto/AttoPlaygroundPage';
+import { TestCaseLibraryPage } from '../pages/atto/TestCaseLibraryPage';
+import { SideNavigation } from '../pages/components/SideNavigation';
 import { missingCredentials, missingCredentialsMessage, signInToTestsigma } from '../support/testsigma-auth';
 
 const generationPrompt = 'Generate test cases for a user login page with email and password fields. Cover successful login with valid credentials, invalid email format, incorrect password, empty fields, password visibility toggle, and forgot-password navigation. For each test case, provide a clear title, preconditions, steps, and expected results, including relevant validation and error messages.';
+const targetFolderName = 'AI Generated Feature';
 
 async function installNewsNotificationHandler(page: Page) {
 	const notificationPrompt = page.getByText("We'd like to show you notifications for the latest news and updates.", { exact: true });
@@ -37,182 +41,135 @@ test('[Atto] Generate, automate, inspect labs, and save a test case', async ({ p
 	await installNewsNotificationHandler(page);
 	await signInToTestsigma(page);
 
-	const testSuitesHref = await page.getByRole('link', { name: 'Test Suites' }).getAttribute('href');
-	const currentProjectId = testSuitesHref?.match(/\/td\/([^/]+)/)?.[1];
+	const currentProjectId = await new SideNavigation(page).currentVersionId();
 	expect(currentProjectId, 'The Test Suites link should identify the current project').toBeTruthy();
 
+	const library = new TestCaseLibraryPage(page);
 	let projectId = currentProjectId!;
-	await page.goto(`/ui/td/${projectId}/cases/filters`);
-	const libraryTree = page.getByRole('tree');
-	await expect(libraryTree).toBeVisible({ timeout: 30000 });
-	let initialTargetFolder = libraryTree.getByRole('button', { name: /^AI Generated Feature \(\d+\)$/ });
-	if (!await initialTargetFolder.count() && projectId !== '1') {
+	await library.open(projectId);
+	if (!await library.folder(targetFolderName).count() && projectId !== '1') {
 		projectId = '1';
-		await page.goto(`/ui/td/${projectId}/cases/filters`);
-		await expect(libraryTree).toBeVisible({ timeout: 30000 });
-		initialTargetFolder = libraryTree.getByRole('button', { name: /^AI Generated Feature \(\d+\)$/ });
+		await library.open(projectId);
 	}
-	await expect(initialTargetFolder, 'The selected project must contain the AI Generated Feature folder').toHaveCount(1);
-	const countMatch = (await initialTargetFolder.innerText()).match(/\((\d+)\)$/);
-	const initialLibraryCount = Number(countMatch?.[1] ?? 0);
+	await expect(library.folder(targetFolderName), 'The selected project must contain the AI Generated Feature folder').toHaveCount(1);
+	const initialLibraryCount = await library.folderCount(targetFolderName);
 
-	await page.goto(`/ui/ai-journey/${projectId}`);
-	await expect(page).toHaveURL(new RegExp(`/ui/ai-journey/${projectId}`));
+	const atto = new AttoHomePage(page);
+	await atto.open(projectId);
+	const playground = await atto.startGenerating();
 
-	const homeGenerateButton = page.getByRole('button', { name: /ai_journey\.generate\.with\.ai/i }).first();
-	await expect(homeGenerateButton).toBeEnabled();
-	await homeGenerateButton.click();
-	await page.waitForURL(/\/ui\/playground\//, { timeout: 30000 });
+	await expect(playground.promptField).toBeVisible();
+	await expect(playground.readLibraryCheckbox).toBeVisible();
+	await playground.stopReadingLibrary();
 
-	const promptField = page.getByRole('textbox', { name: 'Describe the feature or flow you want to test...' });
-	const readLibraryCheckbox = page.getByRole('checkbox', { name: 'Read existing test case library' });
-	await expect(promptField).toBeVisible();
-	await expect(readLibraryCheckbox).toBeVisible();
+	await playground.promptField.fill(generationPrompt);
+	await expect(playground.generateButton).toBeEnabled();
+	await playground.generateButton.click();
 
-	if (await readLibraryCheckbox.isChecked()) {
-		await page.getByText('Read existing test case library', { exact: true }).click();
-	}
-	await expect(readLibraryCheckbox).not.toBeChecked();
-
-	await promptField.fill(generationPrompt);
-	const generateButton = page.getByRole('button', { name: /Generate with AI/ }).last();
-	await expect(generateButton).toBeEnabled();
-	await generateButton.click();
-
-	await expect(promptField).toBeDisabled();
-	await expect(page.getByRole('button', { name: /All test cases \([1-9]\d*\)/ })).toBeVisible({ timeout: 120000 });
-	await expect(promptField).toBeEnabled({ timeout: 120000 });
+	await expect(playground.promptField).toBeDisabled();
+	await expect(playground.generatedCases).toBeVisible({ timeout: 120000 });
+	await expect(playground.promptField).toBeEnabled({ timeout: 120000 });
 
 	const playgroundUrl = page.url();
-	const resultTabs = [
-		page.getByRole('button', { name: /^All test cases \(\d+\)$/ }),
-		page.getByRole('button', { name: /^Pending \(\d+\)$/ }),
-		page.getByRole('button', { name: /^Accepted \(\d+\)$/ }),
-		page.getByRole('button', { name: /^Rejected \(\d+\)$/ }),
-	];
-	for (const resultTab of resultTabs) {
+	for (const resultTab of playground.resultTabs) {
 		await expect(resultTab).toBeVisible();
 		await expect(resultTab).toBeEnabled();
 		await resultTab.click();
 		await expect(page).toHaveURL(playgroundUrl);
 	}
-	await resultTabs[0].click();
+	await playground.resultTabs[0].click();
 
-	const firstGroupCount = page.getByText(/^\(\d+\)$/).first();
-	await expect(firstGroupCount).toBeVisible();
-	await firstGroupCount.click();
+	await expect(playground.firstGroupCount).toBeVisible();
+	await playground.firstGroupCount.click();
 
-	const firstTestCase = page.getByRole('button', { name: /New.*Pending/ }).first();
-	await expect(firstTestCase).toBeVisible();
-	await firstTestCase.click();
+	await expect(playground.firstTestCase).toBeVisible();
+	await playground.firstTestCase.click();
 
-	const detailsHeading = page.getByRole('heading', { name: 'Test Case Details', exact: true }).filter({ visible: true });
-	await expect(detailsHeading).toBeVisible({ timeout: 15000 });
-	await expect(page.getByText('Move with', { exact: true }).filter({ visible: true })).toBeVisible();
+	const modal = playground.modal;
+	await expect(modal.heading).toBeVisible({ timeout: 15000 });
+	await expect(modal.moveWith).toBeVisible();
 
-	const previousCaseButton = page.getByRole('button', { name: 'Navigate to previous test case', exact: true }).filter({ visible: true });
-	const nextCaseButton = page.getByRole('button', { name: 'Navigate to next test case', exact: true }).filter({ visible: true });
-	const closeModalButton = page.getByRole('button', { name: 'Close modal', exact: true }).filter({ visible: true });
-	await expect(previousCaseButton).toBeVisible();
-	await expect(nextCaseButton).toBeVisible();
-	await expect(nextCaseButton).toBeEnabled();
-	await expect(closeModalButton).toBeVisible();
+	await expect(modal.previousButton).toBeVisible();
+	await expect(modal.nextButton).toBeVisible();
+	await expect(modal.nextButton).toBeEnabled();
+	await expect(modal.closeButton).toBeVisible();
 
-	const generatedTitleHeading = page.getByRole('heading', { level: 1 }).filter({ visible: true });
-	await expect(generatedTitleHeading).toBeVisible();
-	const generatedTestCaseTitle = (await generatedTitleHeading.innerText()).trim();
+	await expect(modal.title).toBeVisible();
+	const generatedTestCaseTitle = (await modal.title.innerText()).trim();
 	expect(generatedTestCaseTitle).not.toBe('');
-	const detailsBadges = page.locator('span.px-2').filter({ visible: true });
-	await expect(detailsBadges.filter({ hasText: /^New$/ })).toBeVisible();
-	await expect(detailsBadges.filter({ hasText: /^Pending$/ })).toBeVisible();
+	await expect(modal.badge('New')).toBeVisible();
+	await expect(modal.badge('Pending')).toBeVisible();
 
-	const manualStepsTab = page.getByRole('button', { name: 'Manual Steps', exact: true }).filter({ visible: true });
-	const automatedStepsTab = page.getByRole('button', { name: 'Automated Steps', exact: true }).filter({ visible: true });
-	await expect(manualStepsTab).toBeVisible();
-	await expect(manualStepsTab).toBeEnabled();
-	await expect(automatedStepsTab).toBeVisible();
-	await expect(automatedStepsTab).toBeEnabled();
+	await expect(modal.manualStepsTab).toBeVisible();
+	await expect(modal.manualStepsTab).toBeEnabled();
+	await expect(modal.automatedStepsTab).toBeVisible();
+	await expect(modal.automatedStepsTab).toBeEnabled();
 
-	const manualSteps = page.getByText(/^(Navigate|Wait|Enter|Click|Verify|Open|Select|Submit|Type)\b/i).filter({ visible: true });
-	await expect(manualSteps.first()).toBeVisible();
-	expect(await manualSteps.count()).toBeGreaterThan(0);
-	await expect(page.getByRole('button', { name: 'Edit', exact: true }).filter({ visible: true })).toBeVisible();
-	await expect(page.getByRole('button', { name: /Generate Automated Steps$/ }).filter({ visible: true })).toBeVisible();
-	await expect(page.getByText('Agentic Learning', { exact: true }).filter({ visible: true })).toBeVisible();
+	await expect(modal.steps.first()).toBeVisible();
+	expect(await modal.steps.count()).toBeGreaterThan(0);
+	await expect(modal.editButton).toBeVisible();
+	await expect(modal.generateAutomatedSteps).toBeVisible();
+	await expect(modal.agenticLearning).toBeVisible();
 
-	await automatedStepsTab.click();
-	await expect(page.getByText(/Leverage provided context to create steps/i).filter({ visible: true })).toBeVisible();
-	const generateAutomatedSteps = page.getByRole('button', { name: /Generate Automated Steps$/ }).filter({ visible: true });
-	await expect(generateAutomatedSteps).toBeEnabled();
-	await generateAutomatedSteps.click();
+	await modal.automatedStepsTab.click();
+	await expect(modal.contextHint).toBeVisible();
+	await expect(modal.generateAutomatedSteps).toBeEnabled();
+	await modal.generateAutomatedSteps.click();
 
-	const runWithCopilot = page.getByRole('button', { name: /Run with Copilot$/ }).filter({ visible: true });
-	const agenticLearning = page.getByText('Agentic Learning', { exact: true }).filter({ visible: true });
-	await expect(runWithCopilot).toBeEnabled({ timeout: 180000 });
-	await expect(agenticLearning).toBeVisible({ timeout: 180000 });
-	await expect(agenticLearning).toBeEnabled();
-	await expect(generateAutomatedSteps).toBeHidden({ timeout: 180000 });
+	await expect(modal.runWithCopilot).toBeEnabled({ timeout: 180000 });
+	await expect(modal.agenticLearning).toBeVisible({ timeout: 180000 });
+	await expect(modal.agenticLearning).toBeEnabled();
+	await expect(modal.generateAutomatedSteps).toBeHidden({ timeout: 180000 });
 
-	const convertedSteps = page.getByText(/^(Navigate|Wait|Enter|Click|Verify|Open|Select|Submit|Type)\b/i).filter({ visible: true });
-	await expect(convertedSteps.first()).toBeVisible();
-	expect(await convertedSteps.count(), 'Automated steps should be generated from the manual steps').toBeGreaterThan(0);
+	await expect(modal.steps.first()).toBeVisible();
+	expect(await modal.steps.count(), 'Automated steps should be generated from the manual steps').toBeGreaterThan(0);
 
-	await runWithCopilot.click({ force: true });
-	const testsigmaLab = page.getByRole('button', { name: /Testsigma Lab$/, includeHidden: true });
-	const localDevicesLab = page.getByRole('button', { name: /Local Devices$/, includeHidden: true });
-	await expect(testsigmaLab).toHaveCount(1, { timeout: 15000 });
-	await expect(localDevicesLab).toHaveCount(1, { timeout: 15000 });
-	await testsigmaLab.click({ force: true });
-	await localDevicesLab.click({ force: true });
-	await expect(page.getByText(/Copilot is unavailable/)).toHaveCount(1);
-	expect(await page.getByText(/Not Installed|Not Started/).count()).toBeGreaterThan(0);
-	const copilotLaunch = page.getByRole('button', { name: 'Launch', exact: true, includeHidden: true });
-	await expect(copilotLaunch).toBeDisabled();
-	await page.getByRole('button', { name: 'Cancel', exact: true, includeHidden: true }).click({ force: true });
+	await modal.runWithCopilot.click({ force: true });
+	await expect(modal.testsigmaLab).toHaveCount(1, { timeout: 15000 });
+	await expect(modal.localDevicesLab).toHaveCount(1, { timeout: 15000 });
+	await modal.testsigmaLab.click({ force: true });
+	await modal.localDevicesLab.click({ force: true });
+	await expect(modal.copilotUnavailable).toHaveCount(1);
+	expect(await modal.agentNotRunning.count()).toBeGreaterThan(0);
+	await expect(modal.launchButton).toBeDisabled();
+	await modal.cancelButton.click({ force: true });
 
-	await agenticLearning.click({ force: true });
-	await expect(page.getByText('Terminal is offline', { exact: true })).toHaveCount(1, { timeout: 15000 });
-	await expect(page.getByRole('button', { name: /Local Devices$/, includeHidden: true })).toHaveCount(1);
-	await expect(page.getByRole('button', { name: 'Launch', exact: true, includeHidden: true })).toBeDisabled();
-	await page.getByRole('button', { name: 'Cancel', exact: true, includeHidden: true }).click({ force: true });
+	await modal.agenticLearning.click({ force: true });
+	await expect(modal.terminalOffline).toHaveCount(1, { timeout: 15000 });
+	await expect(modal.localDevicesLab).toHaveCount(1);
+	await expect(modal.launchButton).toBeDisabled();
+	await modal.cancelButton.click({ force: true });
 
-	const saveToLibrary = page.getByRole('button', { name: 'Save to Library', exact: true }).filter({ visible: true });
-	await expect(saveToLibrary).toBeEnabled();
-	await saveToLibrary.click();
-	await expect(page.getByText('Select Location', { exact: true }).filter({ visible: true })).toBeVisible({ timeout: 15000 });
-	const locationSearch = page.getByRole('textbox', { name: 'Search', exact: true }).filter({ visible: true });
-	await locationSearch.fill('AI Generated Feature');
-	const targetFolder = page.getByRole('button', { name: 'AI Generated Feature', exact: true }).filter({ visible: true });
+	await expect(playground.saveToLibrary).toBeEnabled();
+	await playground.saveToLibrary.click();
+	await expect(playground.selectLocation).toBeVisible({ timeout: 15000 });
+	await playground.locationSearch.fill(targetFolderName);
+	const targetFolder = playground.locationFolder(targetFolderName);
 	await expect(targetFolder).toBeVisible();
 	await targetFolder.click();
-	await expect(page.getByText('Target Folder', { exact: true }).filter({ visible: true })).toBeVisible();
-	const confirmLocation = page.getByRole('button', { name: 'Confirm', exact: true }).filter({ visible: true });
-	await expect(confirmLocation).toBeEnabled();
-	await confirmLocation.click();
-	await expect(confirmLocation).toHaveCount(0, { timeout: 30000 });
+	await expect(playground.targetFolderLabel).toBeVisible();
+	await expect(playground.confirmLocation).toBeEnabled();
+	await playground.confirmLocation.click();
+	await expect(playground.confirmLocation).toHaveCount(0, { timeout: 30000 });
 
 	// Confirm only selects the destination. Click Save again to persist the test case.
-	const save = page.getByRole('button', { name: 'Save', exact: true }).filter({ visible: true });
-	const finalSaveButton = (await save.isVisible()) ? save : saveToLibrary;
+	const finalSaveButton = (await playground.saveButton.isVisible()) ? playground.saveButton : playground.saveToLibrary;
 	await expect(finalSaveButton).toBeEnabled({ timeout: 15000 });
 	await finalSaveButton.click();
 	await expect(finalSaveButton).toBeDisabled({ timeout: 30000 });
 
-	const libraryVerificationPage = await page.context().newPage();
-	await libraryVerificationPage.goto(`/ui/td/${projectId}/cases/filters`);
-	const verificationTree = libraryVerificationPage.getByRole('tree');
-	await expect(verificationTree).toBeVisible({ timeout: 30000 });
-	const updatedTargetFolder = verificationTree.getByRole('button', { name: /^AI Generated Feature \(\d+\)$/ });
+	const libraryVerification = new TestCaseLibraryPage(await page.context().newPage());
+	await libraryVerification.open(projectId);
+	const updatedTargetFolder = libraryVerification.folder(targetFolderName);
 	await expect(updatedTargetFolder).toHaveText(
 		new RegExp(`^AI Generated Feature\\s*\\(${initialLibraryCount + 1}\\)$`),
 		{ timeout: 30000 },
 	);
 	await updatedTargetFolder.click();
-	const savedTestCase = verificationTree.getByRole('link').filter({ hasText: generatedTestCaseTitle }).last();
-	await expect(savedTestCase).toBeVisible({ timeout: 30000 });
-	await libraryVerificationPage.close();
+	await expect(libraryVerification.testCase(generatedTestCaseTitle)).toBeVisible({ timeout: 30000 });
+	await libraryVerification.page.close();
 
 	await page.bringToFront();
-	await closeModalButton.click();
-	await expect(detailsHeading).toBeHidden();
+	await modal.closeButton.click();
+	await expect(modal.heading).toBeHidden();
 });
